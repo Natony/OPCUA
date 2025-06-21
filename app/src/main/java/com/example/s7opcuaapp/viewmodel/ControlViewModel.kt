@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import android.util.Log
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @HiltViewModel
@@ -27,6 +28,8 @@ class ControlViewModel @Inject constructor(
     val uiState: StateFlow<ControlUiState> = _uiState
 
     private val repoImpl = repository as OPCUARepositoryImpl
+
+    private val functionCodeNodeIndex = 11
 
     init {
         initializeConnection()
@@ -100,33 +103,57 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+    fun onFunctionSelected(code: Int) {
+        _uiState.update { it.copy(selectedFunction = code) }
+    }
+
+    fun onInlineValueChange(index: Int, text: String) {
+        _uiState.update {
+            it.copy(
+                intInputs = it.intInputs.toMutableMap().apply { put(index, text) }
+            )
+        }
+    }
+
+    fun onSendAll() {
+        if (_uiState.value.isWriting) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isWriting = true, errorMessage = null) }
+            try {
+                // 1) Ghi function code
+                repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
+
+                // 2) Ghi 6 giá trị Start/End
+                listOf(2,3,4,5,6,7).forEach { idx ->
+                    val txt = uiState.value.intInputs[idx] ?: uiState.value.plcData.ints.getOrNull(idx)?.toString().orEmpty()
+                    val v = txt.toIntOrNull() ?: 0
+                    repoImpl.writeInt(idx, v)
+                }
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "Ghi thất bại: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isWriting = false) }
+            }
+        }
+    }
+
     /**
      * Dialog management
      */
-    fun onOpenDialogForField(fieldId: String) {
-        _uiState.value = _uiState.value.copy(openDialogForField = fieldId)
-        Log.d("ControlVM", "📝 Opening dialog for $fieldId")
+    fun openNumberDialog(index: Int) {
+        _uiState.value = _uiState.value.copy(openDialogForIndex = index)
+        Log.d("ControlVM", "📝 Opening dialog for index $index")
     }
 
-    fun onDismissDialog() {
-        _uiState.value = _uiState.value.copy(openDialogForField = null)
+    /** Đóng dialog */
+    fun dismissDialog() {
+        _uiState.value = _uiState.value.copy(openDialogForIndex = null)
         Log.d("ControlVM", "❌ Dialog dismissed")
     }
 
-    /**
-     * Write Integer với validation
-     */
-    fun onConfirmNumber(fieldId: String, value: Int) {
-        val index = fieldId.split(" ").lastOrNull()?.toIntOrNull()
-        if (index == null) {
-            Log.e("ControlVM", "❌ Invalid field ID: $fieldId")
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "ID field không hợp lệ: $fieldId",
-                openDialogForField = null
-            )
-            return
-        }
-
+    /** Khi confirm nhập số, ghi ngay vào index */
+    fun confirmNumber(index: Int, value: Int) {
         // Prevent double-tap
         if (_uiState.value.isWriting) {
             Log.w("ControlVM", "⚠️ Write operation already in progress")
@@ -136,7 +163,7 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(
                 isWriting = true,
-                openDialogForField = null,
+                openDialogForIndex = null,
                 errorMessage = null
             )
 
@@ -144,7 +171,6 @@ class ControlViewModel @Inject constructor(
                 Log.d("ControlVM", "✏️ Writing Int[$index] = $value")
                 repoImpl.writeInt(index, value)
                 Log.d("ControlVM", "✅ Integer write successful")
-
             } catch (e: Exception) {
                 Log.e("ControlVM", "❌ Integer write failed", e)
                 _uiState.value = _uiState.value.copy(

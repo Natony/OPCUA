@@ -1,7 +1,7 @@
+// File: BooleanStatusItem.kt
 package com.example.s7opcuaapp.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -16,32 +16,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Composable hiển thị một nút nhấn với icon thay đổi theo trạng thái:
- *  - Label
- *  - Icon button với iconOn/iconOff
- *  - Background color thay đổi theo trạng thái
- *  - Click để toggle trạng thái
+ * Hiển thị trạng thái Boolean (On/Off) với style giống BoolControlItem
+ * ★ Read‑only, không gửi hay toggle gì
  */
 @Composable
-fun BoolControlItem(
+fun BooleanStatusItem(
     label: String,
     value: Boolean,
     iconOn: Int,
     iconOff: Int,
-    isWriting: Boolean = false,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = if (value) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
     } else {
         MaterialTheme.colorScheme.surface
-    }
-
-    val iconTint = if (value) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     }
 
     val textColor = if (value) {
@@ -53,14 +42,9 @@ fun BoolControlItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(enabled = !isWriting) { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = backgroundColor
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (value) 4.dp else 1.dp
-        )
+            .padding(vertical = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (value) 4.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -68,7 +52,7 @@ fun BoolControlItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon button
+            // Icon lớn
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -81,13 +65,13 @@ fun BoolControlItem(
             ) {
                 Icon(
                     painter = painterResource(id = if (value) iconOn else iconOff),
-                    contentDescription = if (value) "On" else "Off",
+                    contentDescription = null,
                     modifier = Modifier.size(24.dp),
                     tint = Color.Unspecified
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(Modifier.width(12.dp))
 
             // Label
             Text(
@@ -98,23 +82,16 @@ fun BoolControlItem(
                 modifier = Modifier.weight(1f)
             )
 
-            // Status indicator
-            if (isWriting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(
-                            if (value) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                        )
-                )
-            }
+            // Indicator nhỏ báo active/inactive
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (value) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+            )
         }
     }
 }

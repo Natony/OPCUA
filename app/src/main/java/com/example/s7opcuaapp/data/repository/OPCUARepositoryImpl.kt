@@ -37,8 +37,8 @@ class OPCUARepositoryImpl(
     private val isConnected = AtomicBoolean(false)
 
     // Node IDs (chính phải trùng với phần 'Published Variables' trong PLC)
-    private val boolNodeIds = (3..17).map { "ns=4;i=$it" } // Bool1–Bool15
-    private val intNodeIds = (18..27).map { "ns=4;i=$it" } // Int1–Int10
+    private val boolNodeIds = (3..16).map { "ns=4;i=$it" }
+    private val intNodeIds = (17..44).map { "ns=4;i=$it" }
 
     // Thread-safe data holders
     private val boolValues = mutableMapOf<Int, Boolean>()

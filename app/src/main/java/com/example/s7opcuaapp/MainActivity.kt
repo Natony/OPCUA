@@ -12,7 +12,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class   MainActivity : ComponentActivity() {
 
     @Inject lateinit var prefsManager: PrefsManager
 

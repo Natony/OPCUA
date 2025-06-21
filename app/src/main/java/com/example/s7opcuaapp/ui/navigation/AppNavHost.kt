@@ -61,9 +61,27 @@ fun AppNavHost(navController: NavHostController) {
                 val uiState by controlViewModel.uiState.collectAsState()
                 ControlScreen(
                     uiState = uiState,
-                    onToggleBoolean = { idx, newVal -> controlViewModel.onToggleBoolean(idx, newVal) },
-                    onOpenDialog = { fieldId -> controlViewModel.onOpenDialogForField(fieldId) },
-                    onConfirmNumber = { fieldId, value -> controlViewModel.onConfirmNumber(fieldId, value) }
+                    onToggleBoolean = { idx, newVal ->
+                        controlViewModel.onToggleBoolean(idx, newVal)
+                    },
+                    onOpenDialog = { index ->
+                        controlViewModel.openNumberDialog(index)
+                    },
+                    onConfirmNumber = { index, value ->
+                        controlViewModel.confirmNumber(index, value)
+                    },
+                    onDismissDialog = {
+                        controlViewModel.dismissDialog()
+                    },
+                    onFunctionSelect   = {
+                        code      -> controlViewModel.onFunctionSelected(code)
+                    },
+                    onTextChange       = {
+                        idx, txt  -> controlViewModel.onInlineValueChange(idx, txt)
+                    },
+                    onSendAll          = {
+                        -> controlViewModel.onSendAll()
+                    }
                 )
             }
 
