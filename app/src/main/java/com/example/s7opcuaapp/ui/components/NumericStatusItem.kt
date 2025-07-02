@@ -1,22 +1,20 @@
-// File: NumericStatusItem.kt
 package com.example.s7opcuaapp.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Color
 
 /**
- * Hiển thị chỉ số số (Int) dạng read‑only,
- * không có icon, giữ style giống MultiStateStatusItem.
+ * Hiển thị chỉ số số (Int) dạng read‑only với gạch dưới,
+ * giống như InlineNumberInputItem nhưng không cho phép chỉnh sửa.
  */
 @Composable
 fun NumericStatusItem(
@@ -24,52 +22,48 @@ fun NumericStatusItem(
     value: Int,
     modifier: Modifier = Modifier
 ) {
-    val isActive = value != 0
-    val backgroundColor = if (isActive)
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-    else
-        MaterialTheme.colorScheme.surface
-
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 4.dp else 1.dp)
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    fontSize = 14.sp,
-                    fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
-                    color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = value.toString(),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = value.toString(),
+                        style = TextStyle(
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                }
+
+                // Gạch dưới
+                Divider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 1.dp,
+                    color = Color.Gray
                 )
             }
-
-            // Indicator nhỏ báo active/inactive
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (isActive)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-            )
         }
     }
 }

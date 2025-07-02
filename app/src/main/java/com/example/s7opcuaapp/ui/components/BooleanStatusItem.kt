@@ -27,71 +27,18 @@ fun BooleanStatusItem(
     iconOff: Int,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (value) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
 
-    val textColor = if (value) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (value) 4.dp else 1.dp)
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icon lớn
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (value) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        else Color.Transparent
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = if (value) iconOn else iconOff),
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.Unspecified
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            // Label
-            Text(
-                text = label,
-                color = textColor,
-                fontSize = 14.sp,
-                fontWeight = if (value) FontWeight.Medium else FontWeight.Normal,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Indicator nhỏ báo active/inactive
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (value) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
-            )
-        }
+        Icon(
+            painter = painterResource(id = if (value) iconOn else iconOff),
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = Color.Unspecified
+        )
     }
 }

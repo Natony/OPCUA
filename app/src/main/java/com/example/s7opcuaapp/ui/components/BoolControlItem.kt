@@ -1,120 +1,42 @@
 package com.example.s7opcuaapp.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 
 /**
- * Composable hiển thị một nút nhấn với icon thay đổi theo trạng thái:
- *  - Label
- *  - Icon button với iconOn/iconOff
- *  - Background color thay đổi theo trạng thái
- *  - Click để toggle trạng thái
+ * Composable chỉ hiển thị icon tương ứng boolean state,
+ * không có nền, label hay indicator.
  */
 @Composable
 fun BoolControlItem(
-    label: String,
     value: Boolean,
     iconOn: Int,
     iconOff: Int,
-    isWriting: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = if (value) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-
-    val iconTint = if (value) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-    }
-
-    val textColor = if (value) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    Card(
+    Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(enabled = !isWriting) { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = backgroundColor
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (value) 4.dp else 1.dp
-        )
+            .size(56.dp)
+            .clickable { onClick() },
+            contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icon button
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (value) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        else Color.Transparent
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = if (value) iconOn else iconOff),
-                    contentDescription = if (value) "On" else "Off",
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.Unspecified
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Label
-            Text(
-                text = label,
-                color = textColor,
-                fontSize = 14.sp,
-                fontWeight = if (value) FontWeight.Medium else FontWeight.Normal,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Status indicator
-            if (isWriting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(
-                            if (value) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                        )
-                )
-            }
-        }
+        Icon(
+            painter = painterResource(id = if (value) iconOn else iconOff),
+            contentDescription = if (value) "On" else "Off",
+            modifier = Modifier.size(56.dp),
+            tint = Color.Unspecified
+        )
     }
 }
+

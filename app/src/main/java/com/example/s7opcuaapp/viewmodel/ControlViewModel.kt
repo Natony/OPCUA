@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import android.util.Log
+import com.example.s7opcuaapp.util.LoadingTracker
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
@@ -29,9 +30,18 @@ class ControlViewModel @Inject constructor(
 
     private val repoImpl = repository as OPCUARepositoryImpl
 
-    private val functionCodeNodeIndex = 11
+    private val functionCodeNodeIndex = 14
 
     init {
+
+        viewModelScope.launch {
+            repoImpl.observeLoadingPercent()
+                .collect { pct ->
+                    Log.d("ControlVM", "Loading percent = $pct")
+                    _uiState.update { it.copy(loadingPercent = pct) }
+                }
+        }
+
         initializeConnection()
     }
 
@@ -64,6 +74,7 @@ class ControlViewModel @Inject constructor(
                         )
                         Log.d("ControlVM", "📊 Data updated: ${newData.bools.size} bools, ${newData.ints.size} ints")
                     }
+
 
             } catch (e: Exception) {
                 Log.e("ControlVM", "💥 Failed to initialize connection", e)
@@ -115,6 +126,12 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+    fun onTextChange(index: Int, newText: String) {
+        _uiState.value = _uiState.value.copy(
+            intInputs = _uiState.value.intInputs + (index to newText)
+        )
+    }
+
     fun onSendAll() {
         if (_uiState.value.isWriting) return
         viewModelScope.launch(Dispatchers.IO) {
@@ -124,7 +141,7 @@ class ControlViewModel @Inject constructor(
                 repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
 
                 // 2) Ghi 6 giá trị Start/End
-                listOf(2,3,4,5,6,7).forEach { idx ->
+                listOf(5,6,7,8,9,10).forEach { idx ->
                     val txt = uiState.value.intInputs[idx] ?: uiState.value.plcData.ints.getOrNull(idx)?.toString().orEmpty()
                     val v = txt.toIntOrNull() ?: 0
                     repoImpl.writeInt(idx, v)

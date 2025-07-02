@@ -48,7 +48,7 @@ fun MultiStateStatusItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Icon lớn

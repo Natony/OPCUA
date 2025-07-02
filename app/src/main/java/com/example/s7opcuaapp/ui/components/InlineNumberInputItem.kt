@@ -1,17 +1,32 @@
-// File: app/src/main/java/com/example/s7opcuaapp/ui/components/InlineNumberInputItem.kt
 package com.example.s7opcuaapp.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.Divider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * InlineNumberInputItem hiển thị label nằm trên cùng,
+ * rồi mới đến ô nhập số phía dưới với gạch dưới.
+ */
 @Composable
 fun InlineNumberInputItem(
     label: String,
@@ -20,31 +35,79 @@ fun InlineNumberInputItem(
     onTextChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier
+    Column(
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(label, modifier = Modifier.width(100.dp), fontSize = 14.sp)
-
-        OutlinedTextField(
-            value = textValue,
-            onValueChange = { new ->
-                if (new.all { it.isDigit() }) onTextChange(new)
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.weight(1f),
-            enabled = !isWriting
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        if (isWriting) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                strokeWidth = 2.dp
-            )
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BasicTextField(
+                    value = textValue,
+                    onValueChange = { new ->
+                        // Cho phép cả số nguyên và số thập phân
+                        if (new.isEmpty() || new.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            onTextChange(new)
+                        }
+                    },
+                    textStyle = TextStyle(
+                        fontSize = 16.sp,
+                        color = if (isWriting) Color.Gray else MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    enabled = !isWriting,
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (textValue.isEmpty()) {
+                                Text(
+                                    text = "...",
+                                    style = TextStyle(
+                                        fontSize = 16.sp,
+                                        color = Color.Gray
+                                    )
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+
+                // Gạch dưới
+                Divider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 1.dp,
+                    color = if (isWriting) MaterialTheme.colorScheme.primary else Color.Gray
+                )
+            }
+
+            if (isWriting) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.Center),
+                    strokeWidth = 2.dp
+                )
+            }
         }
     }
 }

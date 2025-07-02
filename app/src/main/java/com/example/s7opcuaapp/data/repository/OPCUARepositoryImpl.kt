@@ -4,12 +4,14 @@ import android.util.Log
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.opcua.OPCUAClientManager
+import com.example.s7opcuaapp.util.LoadingTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,12 +40,15 @@ class OPCUARepositoryImpl(
 
     // Node IDs (chính phải trùng với phần 'Published Variables' trong PLC)
     private val boolNodeIds = (3..16).map { "ns=4;i=$it" }
-    private val intNodeIds = (17..44).map { "ns=4;i=$it" }
+    private val intNodeIds = (17..47).map { "ns=4;i=$it" }
 
     // Thread-safe data holders
     private val boolValues = mutableMapOf<Int, Boolean>()
     private val intValues = mutableMapOf<Int, Int>()
     private var lastUpdateTime = 0L
+
+    private val totalNodes = boolNodeIds.size + intNodeIds.size
+    private val loadingTracker = LoadingTracker<String>(totalNodes)
 
     /**
      * Bắt đầu kết nối và subscribe – chạy hoàn toàn background
@@ -143,6 +148,7 @@ class OPCUARepositoryImpl(
             ) { dataValue ->
                 updateBoolValue(idx, dataValue)
             }
+            loadingTracker.markLoaded(nodeId)
         }
 
         intNodeIds.forEachIndexed { idx, nodeId ->
@@ -152,6 +158,7 @@ class OPCUARepositoryImpl(
             ) { dataValue ->
                 updateIntValue(idx, dataValue)
             }
+            loadingTracker.markLoaded(nodeId)
         }
 
         // Bắt đầu batch update timer (nếu có)
@@ -167,6 +174,7 @@ class OPCUARepositoryImpl(
             synchronized(boolValues) {
                 boolValues[index] = newValue
             }
+            //loadingTracker.markLoaded(boolNodeIds[index])
             scheduleUpdate()
         } catch (e: Exception) {
             Log.w("OPCUARepo", "Error updating bool[$index]", e)
@@ -186,9 +194,11 @@ class OPCUARepositoryImpl(
                 is UInteger -> raw.toInt()
                 else        -> 0
             }
+
             synchronized(intValues) {
                 intValues[index] = newValue
             }
+            //loadingTracker.markLoaded(intNodeIds[index])
             scheduleUpdate()
         } catch (e: Exception) {
             Log.w("OPCUARepo", "Error updating int[$index]", e)
@@ -210,6 +220,8 @@ class OPCUARepositoryImpl(
             }
         }
     }
+
+    fun observeLoadingPercent(): StateFlow<Int> = loadingTracker.percent
 
     /**
      * Publish update lên UI thread
