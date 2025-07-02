@@ -1,46 +1,113 @@
 package com.example.s7opcuaapp.ui.screen.config
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.data.model.DeviceEntity
+
 
 @Composable
 fun DeviceListItem(
     device: DeviceEntity,
     isSelected: Boolean,
     onRemove: () -> Unit,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    onEdit: () -> Unit
 ) {
-    val bgColor = if (isSelected) Color(0xFFE0F7FA) else Color.Transparent
-    Row(
+    var showMenu by remember { mutableStateOf(false) }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(bgColor)
-            .clickable { onSelect() }
-            .padding(8.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            .clickable { onSelect() },
+        elevation = if (isSelected) CardDefaults.cardElevation(defaultElevation = 4.dp)
+        else CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = if (isSelected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        else CardDefaults.cardColors()
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = device.name)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = "${device.ipAddress}:${device.port}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(2.dp))
-            if (device.opcUsername.isNotEmpty()) {
-                Text(text = "User: ${device.opcUsername}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = device.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${device.ipAddress}:${device.port}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (device.opcUsername.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = "User: ${device.opcUsername}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-        }
-        IconButton(onClick = onRemove) {
-            Icon(painter = painterResource(id = R.drawable.ic_delete), contentDescription = "Remove")
+
+            // Three dots menu
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        onClick = {
+                            showMenu = false
+                            onEdit()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate") },
+                        onClick = {
+                            showMenu = false
+                            // TODO: Implement duplicate functionality
+                        }
+                    )
+                    Divider()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Delete",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onRemove()
+                        }
+                    )
+                }
+            }
         }
     }
 }

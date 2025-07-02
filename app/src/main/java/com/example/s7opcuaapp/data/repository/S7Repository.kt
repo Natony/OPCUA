@@ -1,5 +1,6 @@
 package com.example.s7opcuaapp.data.repository
 
+import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.PlcData
 import kotlinx.coroutines.flow.Flow
 
@@ -19,4 +20,7 @@ interface S7Repository {
 
     /** Dừng mọi kết nối/subscription */
     fun stop()
+
+    /** Cập nhật thông tin Device (IP, port, credentials…) */
+    fun updateDevice(device: DeviceEntity)
 }

@@ -22,7 +22,9 @@ fun ControlScreen(
     onDismissDialog: () -> Unit,
     onFunctionSelect: (Int) -> Unit,
     onTextChange: (Int, String) -> Unit,
-    onSendAll: () -> Unit
+    onSendAll: () -> Unit,
+    onStartPress: (Int) -> Unit,
+    onEndPress: (Int) -> Unit
 ) {
     val data = uiState.plcData
     var isAuto by remember { mutableStateOf(true) }
@@ -56,6 +58,8 @@ fun ControlScreen(
                     data = data,
                     onToggleBoolean = onToggleBoolean,
                     onOpenDialog = onOpenDialog,
+                    onStartPress = onStartPress,
+                    onEndPress = onEndPress,
                     modifier = Modifier.weight(0.2f)
                 )
 
@@ -77,7 +81,7 @@ fun ControlScreen(
                             onFunctionSelect = onFunctionSelect,
                             onTextChange = onTextChange,
                             onSendAll = onSendAll,
-                            modifier = Modifier.weight(0.4f)
+                            modifier = Modifier.weight(0.35f)
                         )
                     }
                     Row(
@@ -91,7 +95,7 @@ fun ControlScreen(
                             data = data,
                             onToggleBoolean = onToggleBoolean,
                             onToggleAutoMode = { isAuto = !isAuto },
-                            modifier = Modifier.weight(0.6f)
+                            modifier = Modifier.weight(0.65f)
                         )
                     }
                 }

@@ -11,12 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import android.util.Log
-import com.example.s7opcuaapp.util.LoadingTracker
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 @HiltViewModel
@@ -29,87 +28,89 @@ class ControlViewModel @Inject constructor(
     val uiState: StateFlow<ControlUiState> = _uiState
 
     private val repoImpl = repository as OPCUARepositoryImpl
-
     private val functionCodeNodeIndex = 14
 
-    init {
+    // track connection state to prevent duplicate sessions
+    private var connectionStarted = false
 
+    init {
+        // Quan sát tỉ lệ load, nhưng không tự động start kết nối
         viewModelScope.launch {
             repoImpl.observeLoadingPercent()
+                .catch { err -> Log.e("ControlVM", "Error loading percent", err) }
                 .collect { pct ->
                     Log.d("ControlVM", "Loading percent = $pct")
                     _uiState.update { it.copy(loadingPercent = pct) }
                 }
         }
-
-        initializeConnection()
     }
 
     /**
-     * Initialize connection trên background thread
+     * Bắt đầu hoặc khởi động lại kết nối OPC UA với thiết bị hiện tại
      */
-    private fun initializeConnection() {
+    fun startConnection() {
+        if (connectionStarted) return
+        connectionStarted = true
+
         viewModelScope.launch(Dispatchers.IO) {
+
+            // Tiếp tục khởi kết nối mới
+            prefsManager.getCurrentDevice()?.let { repoImpl.updateDevice(it) }
             try {
-                Log.d("ControlVM", "🚀 Initializing OPC UA connection...")
-
-                // Start repository (kết nối và subscribe)
+                Log.d("ControlVM", "Starting OPC UA connection...")
                 repoImpl.start()
-
-                // Observe data trên background thread với throttling
-                repoImpl.observePlcData()
-                    .distinctUntilChanged() // Chỉ emit khi có thay đổi thực sự
-                    .flowOn(Dispatchers.IO)
-                    .catch { error ->
-                        Log.e("ControlVM", "❌ Error observing PLC data", error)
-                        _uiState.value = _uiState.value.copy(
-                            errorMessage = "Lỗi kết nối: ${error.message}"
-                        )
-                    }
-                    .collect { newData ->
-                        // Update UI state
-                        _uiState.value = _uiState.value.copy(
-                            plcData = newData,
-                            errorMessage = null // Clear error khi có data
-                        )
-                        Log.d("ControlVM", "📊 Data updated: ${newData.bools.size} bools, ${newData.ints.size} ints")
-                    }
-
-
+                observePlcData()
             } catch (e: Exception) {
-                Log.e("ControlVM", "💥 Failed to initialize connection", e)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Không thể kết nối: ${e.message}"
-                )
+                Log.e("ControlVM", "Failed to start connection", e)
+                _uiState.update { it.copy(errorMessage = "Không thể kết nối: ${e.message}") }
+                connectionStarted = false
             }
         }
     }
 
+    private suspend fun observePlcData() {
+        repoImpl.observePlcData()
+            .flowOn(Dispatchers.IO)
+            .catch { err ->
+                Log.e("ControlVM", "Error observing PLC data", err)
+                _uiState.update { it.copy(errorMessage = "Lỗi kết nối: ${err.message}") }
+            }
+            .collect { data ->
+                _uiState.update { it.copy(plcData = data, errorMessage = null) }
+                Log.d("ControlVM", "Data updated: ${data.bools.size} bools, ${data.ints.size} ints")
+            }
+    }
+
     /**
-     * Toggle Boolean với error handling tốt hơn
+     * Dừng kết nối và hủy subscription
      */
-    fun onToggleBoolean(index: Int, newValue: Boolean) {
-        // Prevent double-tap
-        if (_uiState.value.isWriting) {
-            Log.w("ControlVM", "⚠️ Write operation already in progress")
-            return
-        }
-
+    fun stopConnection() {
+        if (!connectionStarted) return
+        connectionStarted = false
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(isWriting = true, errorMessage = null)
-
             try {
-                Log.d("ControlVM", "✏️ Writing Boolean[$index] = $newValue")
-                repoImpl.writeBoolean(index, newValue)
-                Log.d("ControlVM", "✅ Boolean write successful")
+                // Chờ repository dừng hẳn
+//                repoImpl.stopAndAwait()
+//                Log.d("ControlVM", "Repository fully stopped")
 
+                repoImpl.stop()
+                Log.d("ControlVM", "Stopped OPC UA connection")
             } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Boolean write failed", e)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Ghi Boolean thất bại: ${e.message}"
-                )
+                Log.e("ControlVM", "Error waiting for repository stop", e)
+            }
+        }
+    }
+
+    fun onToggleBoolean(index: Int, newValue: Boolean) {
+        if (_uiState.value.isWriting) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isWriting = true, errorMessage = null) }
+            try {
+                repoImpl.writeBoolean(index, newValue)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "Ghi Boolean thất bại: ${e.message}") }
             } finally {
-                _uiState.value = _uiState.value.copy(isWriting = false)
+                _uiState.update { it.copy(isWriting = false) }
             }
         }
     }
@@ -119,17 +120,7 @@ class ControlViewModel @Inject constructor(
     }
 
     fun onInlineValueChange(index: Int, text: String) {
-        _uiState.update {
-            it.copy(
-                intInputs = it.intInputs.toMutableMap().apply { put(index, text) }
-            )
-        }
-    }
-
-    fun onTextChange(index: Int, newText: String) {
-        _uiState.value = _uiState.value.copy(
-            intInputs = _uiState.value.intInputs + (index to newText)
-        )
+        _uiState.update { it.copy(intInputs = it.intInputs.toMutableMap().apply { put(index, text) }) }
     }
 
     fun onSendAll() {
@@ -137,16 +128,13 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, errorMessage = null) }
             try {
-                // 1) Ghi function code
                 repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
-
-                // 2) Ghi 6 giá trị Start/End
                 listOf(5,6,7,8,9,10).forEach { idx ->
-                    val txt = uiState.value.intInputs[idx] ?: uiState.value.plcData.ints.getOrNull(idx)?.toString().orEmpty()
+                    val txt = uiState.value.intInputs[idx]
+                        ?: uiState.value.plcData.ints.getOrNull(idx)?.toString().orEmpty()
                     val v = txt.toIntOrNull() ?: 0
                     repoImpl.writeInt(idx, v)
                 }
-
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "Ghi thất bại: ${e.message}") }
             } finally {
@@ -155,83 +143,56 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Dialog management
-     */
     fun openNumberDialog(index: Int) {
-        _uiState.value = _uiState.value.copy(openDialogForIndex = index)
-        Log.d("ControlVM", "📝 Opening dialog for index $index")
+        _uiState.update { it.copy(openDialogForIndex = index) }
     }
 
-    /** Đóng dialog */
     fun dismissDialog() {
-        _uiState.value = _uiState.value.copy(openDialogForIndex = null)
-        Log.d("ControlVM", "❌ Dialog dismissed")
+        _uiState.update { it.copy(openDialogForIndex = null) }
     }
 
-    /** Khi confirm nhập số, ghi ngay vào index */
     fun confirmNumber(index: Int, value: Int) {
-        // Prevent double-tap
-        if (_uiState.value.isWriting) {
-            Log.w("ControlVM", "⚠️ Write operation already in progress")
-            return
-        }
-
+        if (_uiState.value.isWriting) return
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.value = _uiState.value.copy(
-                isWriting = true,
-                openDialogForIndex = null,
-                errorMessage = null
-            )
-
+            _uiState.update { it.copy(isWriting = true, openDialogForIndex = null, errorMessage = null) }
             try {
-                Log.d("ControlVM", "✏️ Writing Int[$index] = $value")
                 repoImpl.writeInt(index, value)
-                Log.d("ControlVM", "✅ Integer write successful")
             } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Integer write failed", e)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Ghi Integer thất bại: ${e.message}"
-                )
+                _uiState.update { it.copy(errorMessage = "Ghi Integer thất bại: ${e.message}") }
             } finally {
-                _uiState.value = _uiState.value.copy(isWriting = false)
+                _uiState.update { it.copy(isWriting = false) }
             }
         }
     }
 
-    /**
-     * Clear error message
-     */
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
+    fun onStartPress(index: Int) {
+        viewModelScope.launch {
+            repoImpl.writeBoolean(index, true)
+        }
     }
 
-    /**
-     * Retry connection
-     */
+    fun onEndPress(index: Int) {
+        // phát tín hiệu write Boolean false lên OPC UA
+        viewModelScope.launch {
+            repoImpl.writeBoolean(index, false)
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
     fun retryConnection() {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                Log.d("ControlVM", "🔄 Retrying connection...")
-                _uiState.value = _uiState.value.copy(errorMessage = null)
-
-                // Stop và start lại
-                repoImpl.stop()
-                kotlinx.coroutines.delay(1000)
-                repoImpl.start()
-
-            } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Retry failed", e)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Retry thất bại: ${e.message}"
-                )
-            }
+            stopConnection()
+            kotlinx.coroutines.delay(1000)
+            startConnection()
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        Log.d("ControlVM", "🧹 ViewModel cleared, stopping repository...")
-        repoImpl.stop()
+        stopConnection()
     }
+
 }

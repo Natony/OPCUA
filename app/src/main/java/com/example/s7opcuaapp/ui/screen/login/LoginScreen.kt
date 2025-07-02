@@ -21,11 +21,11 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Login", modifier = Modifier.padding(bottom = 16.dp))
+        Text("Login", modifier = Modifier.padding(bottom = 8.dp))
 
         CommonTextField(
             label = "Username",
@@ -41,7 +41,7 @@ fun LoginScreen(
             isPasswordVisible = uiState.isPasswordVisible,
             onTogglePasswordVisibility = onTogglePasswordVisibility
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (uiState.isLoading) {
             CircularProgressIndicator()

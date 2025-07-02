@@ -25,7 +25,9 @@ fun BottomControlsRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             BoolControlItem(
@@ -33,6 +35,12 @@ fun BottomControlsRow(
                 iconOn = R.drawable.ic_power_on,
                 iconOff = R.drawable.ic_power_off,
                 onClick = { onToggleBoolean(4, data.bools.getOrNull(4)?.not() ?: false) }
+            )
+            BoolControlItem(
+                value = data.bools.getOrNull(11) ?: false,
+                iconOn = R.drawable.ic_lifo,
+                iconOff = R.drawable.ic_fifo,
+                onClick = { onToggleBoolean(11, data.bools.getOrNull(11)?.not() ?: false) }
             )
             BoolControlItem(
                 value = isAuto,
@@ -43,7 +51,9 @@ fun BottomControlsRow(
         }
 
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             BooleanStatusItem(
@@ -60,7 +70,9 @@ fun BottomControlsRow(
             )
         }
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             BoolControlItem(
@@ -70,10 +82,19 @@ fun BottomControlsRow(
                 onClick = { onToggleBoolean(5, data.bools.getOrNull(5)?.not() ?: false) }
             )
             BoolControlItem(
-                value = data.bools.getOrNull(11) ?: false,
-                iconOn = R.drawable.ic_lifo,
-                iconOff = R.drawable.ic_fifo,
-                onClick = { onToggleBoolean(11, data.bools.getOrNull(11)?.not() ?: false) }
+                value = data.bools.getOrNull(13) ?: false,
+                iconOn = R.drawable.ic_direction_a,
+                iconOff = R.drawable.ic_direction_b,
+                onClick = { onToggleBoolean(13, data.bools.getOrNull(13)?.not() ?: false) }
+            )
+            MultiStateStatusItem(
+                label = "",
+                intValue = data.ints.getOrNull(2) ?: 0,
+                icons = listOf(
+                    R.drawable.ic_count_pallet_off,
+                    R.drawable.ic_count_pallet_on
+                ),
+                modifier = Modifier.size(56.dp)
             )
         }
     }

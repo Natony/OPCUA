@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Auto-reconnect khi mất kết nối
  */
 class OPCUARepositoryImpl(
-    private val device: DeviceEntity
+    private var device: DeviceEntity
 ) : S7Repository {
 
     private val _plcDataFlow = MutableStateFlow(PlcData.empty())
@@ -311,5 +311,10 @@ class OPCUARepositoryImpl(
                 }
             }
         }
+    }
+
+
+    override fun updateDevice(device: DeviceEntity) {
+        this.device = device
     }
 }

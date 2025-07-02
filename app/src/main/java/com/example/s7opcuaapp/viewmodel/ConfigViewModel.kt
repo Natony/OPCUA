@@ -122,4 +122,5 @@ class ConfigViewModel @Inject constructor(
             onSuccess()
         }
     }
+
 }

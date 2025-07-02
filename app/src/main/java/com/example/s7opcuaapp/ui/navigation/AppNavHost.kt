@@ -1,9 +1,10 @@
-// File: app/src/main/java/com/example/s7opcuaapp/ui/navigation/AppNavHost.kt
 package com.example.s7opcuaapp.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -59,6 +60,14 @@ fun AppNavHost(navController: NavHostController) {
             composable("control") {
                 val controlViewModel: ControlViewModel = hiltViewModel()
                 val uiState by controlViewModel.uiState.collectAsState()
+
+                DisposableEffect(Unit) {
+                    controlViewModel.startConnection()
+                    onDispose {
+                        controlViewModel.stopConnection()
+                    }
+                }
+
                 ControlScreen(
                     uiState = uiState,
                     onToggleBoolean = { idx, newVal ->
@@ -81,6 +90,12 @@ fun AppNavHost(navController: NavHostController) {
                     },
                     onSendAll          = {
                         -> controlViewModel.onSendAll()
+                    },
+                    onStartPress = { idx ->
+                        controlViewModel.onStartPress(idx)
+                    },
+                    onEndPress = { idx ->
+                        controlViewModel.onEndPress(idx)
                     }
                 )
             }

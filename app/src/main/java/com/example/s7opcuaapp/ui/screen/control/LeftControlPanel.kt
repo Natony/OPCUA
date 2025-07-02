@@ -9,6 +9,7 @@ import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BoolControlItem
 import com.example.s7opcuaapp.ui.components.IntControlItem
+import com.example.s7opcuaapp.ui.components.PressReleaseBoolControlItem
 
 @Composable
 fun LeftControlPanel(
@@ -16,6 +17,8 @@ fun LeftControlPanel(
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
     onOpenDialog: (Int) -> Unit,
+    onStartPress: (Int) -> Unit,
+    onEndPress: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -26,6 +29,7 @@ fun LeftControlPanel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isAuto) {
+            // Auto mode controls
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -70,17 +74,21 @@ fun LeftControlPanel(
                 )
             }
         } else {
+            // Manual mode controls with press-release behavior
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                BoolControlItem(
+                PressReleaseBoolControlItem(
                     value = data.bools.getOrNull(0) ?: false,
                     iconOn = R.drawable.ic_shuttle_forward_on,
                     iconOff = R.drawable.ic_shuttle_forward_off,
-                    onClick = { onToggleBoolean(0, data.bools.getOrNull(0)?.not() ?: false) }
+                    onPress = { onStartPress(0) },
+                    onRelease = { onEndPress(0) },
+                    enabled = true, // TODO: replace with 0 !in lockedButtons
+                    busy = false    // TODO: replace with 0 in busyButtons
                 )
             }
 
@@ -90,11 +98,14 @@ fun LeftControlPanel(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                BoolControlItem(
+                PressReleaseBoolControlItem(
                     value = data.bools.getOrNull(1) ?: false,
                     iconOn = R.drawable.ic_shuttle_reverse_on,
                     iconOff = R.drawable.ic_shuttle_reverse_off,
-                    onClick = { onToggleBoolean(1, data.bools.getOrNull(1)?.not() ?: false) }
+                    onPress = { onStartPress(1) },
+                    onRelease = { onEndPress(1) },
+                    enabled = true,
+                    busy = false
                 )
             }
         }

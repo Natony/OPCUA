@@ -32,7 +32,7 @@ fun CenterPanel(
     ) {
         // Positions row
         Row(
-            modifier = Modifier.weight(0.3f),
+            modifier = Modifier.weight(0.25f),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -132,7 +132,7 @@ fun CenterPanel(
         // Start/End/Actual/Function/Send row
         Row(
             modifier = Modifier
-                .weight(0.7f)
+                .weight(0.75f)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically

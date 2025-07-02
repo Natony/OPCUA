@@ -5,23 +5,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.viewmodel.ConfigUiState
 
-/**
- * ConfigScreen cho phép:
- *  - Nhập tên (newDeviceName), IP (newDeviceIp), port (newDevicePort),
- *    username (newDeviceUsername), password (newDevicePassword) khi add mới.
- *  - Hiển thị danh sách Device hiện có.
- */
 @Composable
 fun ConfigScreen(
     uiState: ConfigUiState,
@@ -32,71 +31,142 @@ fun ConfigScreen(
     onNewDevicePasswordChanged: (String) -> Unit,
     onAddDevice: () -> Unit,
     onRemoveDevice: (DeviceEntity) -> Unit,
-    onSelectDevice: (DeviceEntity) -> Unit
+    onSelectDevice: (DeviceEntity) -> Unit,
+    onEditDevice: (DeviceEntity) -> Unit = {}
 ) {
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Config Devices", modifier = Modifier.padding(bottom = 8.dp))
-
-        OutlinedTextField(
-            value = uiState.newDeviceName,
-            onValueChange = onNewDeviceNameChanged,
-            label = { Text("Device Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = uiState.newDeviceIp,
-            onValueChange = onNewDeviceIpChanged,
-            label = { Text("IP Address") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = uiState.newDevicePort,
-            onValueChange = onNewDevicePortChanged,
-            label = { Text("Port (e.g. 4840)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = uiState.newDeviceUsername,
-            onValueChange = onNewDeviceUsernameChanged,
-            label = { Text("Username") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = uiState.newDevicePassword,
-            onValueChange = onNewDevicePasswordChanged,
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onAddDevice, modifier = Modifier.align(Alignment.End)) {
-            Text("Add Device")
+        // Header
+        item {
+            Text(
+                text = "Device Configuration",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
         }
 
-        uiState.errorMessage?.let { msg ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = msg, color = Color.Red)
+        // Add Device Form
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(
+                        text = "Add New Device",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // Compact form fields
+                    OutlinedTextField(
+                        value = uiState.newDeviceName,
+                        onValueChange = onNewDeviceNameChanged,
+                        label = { Text("Device Name", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = uiState.newDeviceIp,
+                            onValueChange = onNewDeviceIpChanged,
+                            label = { Text("IP Address", fontSize = 12.sp) },
+                            modifier = Modifier.weight(2f),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = uiState.newDevicePort,
+                            onValueChange = onNewDevicePortChanged,
+                            label = { Text("Port", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = uiState.newDeviceUsername,
+                            onValueChange = onNewDeviceUsernameChanged,
+                            label = { Text("Username", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = uiState.newDevicePassword,
+                            onValueChange = onNewDevicePasswordChanged,
+                            label = { Text("Password", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onAddDevice,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Add Device")
+                    }
+
+                    uiState.errorMessage?.let { msg ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Device List:", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
+        // Device List Header
+        item {
+            Text(
+                text = "Saved Devices (${uiState.deviceList.size})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
 
-        LazyColumn {
+        // Device List Content
+        if (uiState.deviceList.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Text(
+                        text = "No devices configured yet",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
             items(uiState.deviceList) { device ->
                 DeviceListItem(
                     device = device,
                     isSelected = (device.id == uiState.currentDevice?.id),
                     onRemove = { onRemoveDevice(device) },
-                    onSelect = { onSelectDevice(device) }
+                    onSelect = { onSelectDevice(device) },
+                    onEdit = { onEditDevice(device) }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

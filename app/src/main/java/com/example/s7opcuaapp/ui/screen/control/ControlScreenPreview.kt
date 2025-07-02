@@ -4,7 +4,7 @@ import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.ui.screen.control.ControlScreen
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 
-@Preview(showBackground = true, widthDp = 720, heightDp = 360)
+@Preview(showBackground = true, widthDp = 1920, heightDp = 1200)
 @Composable
 fun ControlScreenPreview() {
     // Sample data for preview
@@ -34,6 +34,8 @@ fun ControlScreenPreview() {
         onDismissDialog = {},
         onFunctionSelect = {},
         onTextChange = { _, _ -> },
-        onSendAll = {}
+        onSendAll = {},
+        onStartPress = {},
+        onEndPress = {}
     )
 }
