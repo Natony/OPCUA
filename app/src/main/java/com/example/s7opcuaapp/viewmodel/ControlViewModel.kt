@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import android.util.Log
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -30,14 +33,19 @@ class ControlViewModel @Inject constructor(
     private val repoImpl = repository as OPCUARepositoryImpl
     private val functionCodeNodeIndex = 14
 
-    // track connection state to prevent duplicate sessions
+    // Synchronization để tránh race condition khi start/stop nhanh
+    private val connectionMutex = Mutex()
     private var connectionStarted = false
+    private var dataObservationJob: Job? = null
 
     init {
-        // Quan sát tỉ lệ load, nhưng không tự động start kết nối
+        // Quan sát tỉ lệ load với proper error handling
         viewModelScope.launch {
             repoImpl.observeLoadingPercent()
-                .catch { err -> Log.e("ControlVM", "Error loading percent", err) }
+                .catch { err ->
+                    Log.e("ControlVM", "Error observing loading percent", err)
+                    _uiState.update { it.copy(errorMessage = "Loading error: ${err.message}") }
+                }
                 .collect { pct ->
                     Log.d("ControlVM", "Loading percent = $pct")
                     _uiState.update { it.copy(loadingPercent = pct) }
@@ -46,63 +54,126 @@ class ControlViewModel @Inject constructor(
     }
 
     /**
-     * Bắt đầu hoặc khởi động lại kết nối OPC UA với thiết bị hiện tại
+     * Thread-safe start connection với proper synchronization
      */
     fun startConnection() {
-        if (connectionStarted) return
-        connectionStarted = true
+        viewModelScope.launch {
+            connectionMutex.withLock {
+                if (connectionStarted) {
+                    Log.d("ControlVM", "⚠️ Connection already started/starting, skipping")
+                    return@withLock
+                }
 
-        viewModelScope.launch(Dispatchers.IO) {
+                connectionStarted = true
+                Log.d("ControlVM", "🚀 Starting OPC UA connection...")
 
-            // Tiếp tục khởi kết nối mới
-            prefsManager.getCurrentDevice()?.let { repoImpl.updateDevice(it) }
-            try {
-                Log.d("ControlVM", "Starting OPC UA connection...")
-                repoImpl.start()
-                observePlcData()
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Failed to start connection", e)
-                _uiState.update { it.copy(errorMessage = "Không thể kết nối: ${e.message}") }
-                connectionStarted = false
+                try {
+                    // Update device info from preferences
+                    prefsManager.getCurrentDevice()?.let { device ->
+                        repoImpl.updateDevice(device)
+                        Log.d("ControlVM", "Updated device: ${device.name} @ ${device.ipAddress}:${device.port}")
+                    }
+
+                    // Reset loading state và error
+                    _uiState.update { it.copy(loadingPercent = 0, errorMessage = null) }
+
+                    // Start repository connection
+                    repoImpl.start()
+
+                    // Start observing PLC data
+                    startDataObservation()
+
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Failed to start connection", e)
+                    _uiState.update { it.copy(errorMessage = "Không thể kết nối: ${e.message}") }
+                    connectionStarted = false
+                }
             }
         }
-    }
-
-    private suspend fun observePlcData() {
-        repoImpl.observePlcData()
-            .flowOn(Dispatchers.IO)
-            .catch { err ->
-                Log.e("ControlVM", "Error observing PLC data", err)
-                _uiState.update { it.copy(errorMessage = "Lỗi kết nối: ${err.message}") }
-            }
-            .collect { data ->
-                _uiState.update { it.copy(plcData = data, errorMessage = null) }
-                Log.d("ControlVM", "Data updated: ${data.bools.size} bools, ${data.ints.size} ints")
-            }
     }
 
     /**
-     * Dừng kết nối và hủy subscription
+     * Riêng biệt data observation để có thể restart dễ dàng
+     */
+    private suspend fun startDataObservation() {
+        // Cancel previous observation if exists
+        dataObservationJob?.cancel()
+
+        dataObservationJob = viewModelScope.launch {
+            repoImpl.observePlcData()
+                .flowOn(Dispatchers.IO)
+                .catch { err ->
+                    Log.e("ControlVM", "Error observing PLC data", err)
+                    _uiState.update { it.copy(errorMessage = "Lỗi kết nối: ${err.message}") }
+                    connectionStarted = false // Allow restart on error
+                }
+                .collect { data ->
+                    _uiState.update { it.copy(plcData = data, errorMessage = null) }
+                    Log.d("ControlVM", "Data updated: ${data.bools.size} bools, ${data.ints.size} ints")
+                }
+        }
+    }
+
+    /**
+     * Thread-safe stop connection với proper cleanup
      */
     fun stopConnection() {
-        if (!connectionStarted) return
-        connectionStarted = false
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Chờ repository dừng hẳn
-//                repoImpl.stopAndAwait()
-//                Log.d("ControlVM", "Repository fully stopped")
+        viewModelScope.launch {
+            connectionMutex.withLock {
+                if (!connectionStarted) {
+                    Log.d("ControlVM", "⚠️ Connection not started, nothing to stop")
+                    return@withLock
+                }
 
-                repoImpl.stop()
-                Log.d("ControlVM", "Stopped OPC UA connection")
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Error waiting for repository stop", e)
+                Log.d("ControlVM", "🛑 Stopping OPC UA connection...")
+                connectionStarted = false
+
+                try {
+                    // Cancel data observation first
+                    dataObservationJob?.cancel()
+                    dataObservationJob = null
+
+                    // Stop repository
+                    repoImpl.stop()
+
+                    // Reset loading state when stopped
+                    _uiState.update { it.copy(loadingPercent = 0) }
+
+                    Log.d("ControlVM", "✅ OPC UA connection stopped successfully")
+
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Error stopping connection", e)
+                }
             }
         }
     }
 
+    /**
+     * Restart connection với proper sequencing và extended delays
+     */
+    fun restartConnection() {
+        Log.d("ControlVM", "🔄 Restarting connection...")
+        viewModelScope.launch {
+            // Stop first
+            stopConnection()
+
+            // Wait longer for complete cleanup (repository cần 2s để cleanup session)
+            delay(3000) // Tăng từ 1.5s lên 3s
+
+            // Then start
+            startConnection()
+        }
+    }
+
+    /**
+     * Check connection status
+     */
+    fun isConnectionActive(): Boolean {
+        return connectionStarted
+    }
+
     fun onToggleBoolean(index: Int, newValue: Boolean) {
-        if (_uiState.value.isWriting) return
+        if (_uiState.value.isWriting || !connectionStarted) return
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, errorMessage = null) }
             try {
@@ -124,7 +195,7 @@ class ControlViewModel @Inject constructor(
     }
 
     fun onSendAll() {
-        if (_uiState.value.isWriting) return
+        if (_uiState.value.isWriting || !connectionStarted) return
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, errorMessage = null) }
             try {
@@ -152,7 +223,7 @@ class ControlViewModel @Inject constructor(
     }
 
     fun confirmNumber(index: Int, value: Int) {
-        if (_uiState.value.isWriting) return
+        if (_uiState.value.isWriting || !connectionStarted) return
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, openDialogForIndex = null, errorMessage = null) }
             try {
@@ -166,15 +237,24 @@ class ControlViewModel @Inject constructor(
     }
 
     fun onStartPress(index: Int) {
+        if (!connectionStarted) return
         viewModelScope.launch {
-            repoImpl.writeBoolean(index, true)
+            try {
+                repoImpl.writeBoolean(index, true)
+            } catch (e: Exception) {
+                Log.e("ControlVM", "Error in onStartPress", e)
+            }
         }
     }
 
     fun onEndPress(index: Int) {
-        // phát tín hiệu write Boolean false lên OPC UA
+        if (!connectionStarted) return
         viewModelScope.launch {
-            repoImpl.writeBoolean(index, false)
+            try {
+                repoImpl.writeBoolean(index, false)
+            } catch (e: Exception) {
+                Log.e("ControlVM", "Error in onEndPress", e)
+            }
         }
     }
 
@@ -183,16 +263,22 @@ class ControlViewModel @Inject constructor(
     }
 
     fun retryConnection() {
-        viewModelScope.launch(Dispatchers.IO) {
-            stopConnection()
-            kotlinx.coroutines.delay(1000)
-            startConnection()
-        }
+        Log.d("ControlVM", "🔄 Retrying connection...")
+        restartConnection()
     }
 
     override fun onCleared() {
         super.onCleared()
-        stopConnection()
+        Log.d("ControlVM", "ViewModel cleared, stopping connection")
+        // Cancel all jobs first
+        dataObservationJob?.cancel()
+        // Stop connection (launch in GlobalScope since viewModelScope is cancelled)
+        kotlinx.coroutines.GlobalScope.launch {
+            try {
+                repoImpl.stop()
+            } catch (e: Exception) {
+                Log.e("ControlVM", "Error stopping in onCleared", e)
+            }
+        }
     }
-
 }

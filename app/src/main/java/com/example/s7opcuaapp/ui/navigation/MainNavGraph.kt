@@ -1,19 +1,18 @@
 package com.example.s7opcuaapp.ui.navigation
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.s7opcuaapp.ui.screen.alarm.AlarmScreen
 import com.example.s7opcuaapp.ui.screen.config.ConfigScreen
@@ -25,32 +24,49 @@ import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import com.example.s7opcuaapp.viewmodel.HomeViewModel
 
 /**
- * MainNavGraph chứa BottomNavBar, gồm 4 tab:
- *  - control
- *  - home
- *  - alarm
- *  - config_btm (để đổi device khi cần)
- *
- * Note: This is now a simple screen with bottom navigation,
- * not a NavHost since it's already inside RootNavHost
+ * MainNavGraph với TopNavigationBar thay thế BottomNavBar
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainNavGraph(rootNavController: NavHostController) {
-    // Create a separate NavController for the bottom navigation
-    val bottomNavController = androidx.navigation.compose.rememberNavController()
+    // Create a separate NavController for the top navigation
+    val topNavController = androidx.navigation.compose.rememberNavController()
+
+    val controlViewModel: ControlViewModel = hiltViewModel()
 
     Scaffold(
-        bottomBar = { BottomNavBar(bottomNavController) }
+        topBar = {
+            // Lấy control data cho status bar, nhưng chỉ khi ở control tab
+            val navBackStackEntry by topNavController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+
+            if (currentRoute == "control") {
+                // Chỉ lấy ControlViewModel khi ở control tab
+                val controlViewModel: ControlViewModel = hiltViewModel()
+                val controlUiState by controlViewModel.uiState.collectAsStateWithLifecycle()
+
+                TopNavigationBar(
+                    navController = topNavController,
+                    statusValue = controlUiState.plcData.ints.getOrNull(0) ?: 0,
+                    batteryLevel = controlUiState.plcData.ints.getOrNull(1) ?: 100
+                )
+            } else {
+                // Ở tab khác thì dùng giá trị mặc định
+                TopNavigationBar(
+                    navController = topNavController,
+                    statusValue = 0,
+                    batteryLevel = 100
+                )
+            }
+        }
     ) { paddingValues ->
         NavHost(
-            navController = bottomNavController,
+            navController = topNavController,
             startDestination = "control",
             modifier = Modifier.padding(paddingValues)
         ) {
             // Control Screen
             composable("control") {
-                val controlViewModel: ControlViewModel = hiltViewModel()
                 val uiState by controlViewModel.uiState.collectAsStateWithLifecycle()
 
                 DisposableEffect(Unit) {
@@ -122,7 +138,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
                         // Khi chọn device ở đây, ta sẽ connect lại ControlViewModel
                         configViewModel.onSelectDevice(device) {
                             // Sau khi đổi device thành công, quay về Control tab
-                            bottomNavController.navigate("control") {
+                            topNavController.navigate("control") {
                                 popUpTo("control") { inclusive = true }
                             }
                         }

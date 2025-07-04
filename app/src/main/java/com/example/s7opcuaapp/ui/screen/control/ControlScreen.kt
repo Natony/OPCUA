@@ -40,74 +40,66 @@ fun ControlScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Nội dung chính dưới overlay
-        Column(modifier = Modifier.fillMaxSize()) {
-            TopStatusBar(
-                statusValue = data.ints.getOrNull(0) ?: 0,
-                batteryLevel = data.ints.getOrNull(1) ?: 0
+        // Nội dung chính - bỏ TopStatusBar vì đã chuyển lên TopNavigationBar
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp)
+        ) {
+            LeftControlPanel(
+                isAuto = isAuto,
+                data = data,
+                onToggleBoolean = onToggleBoolean,
+                onOpenDialog = onOpenDialog,
+                onStartPress = onStartPress,
+                onEndPress = onEndPress,
+                modifier = Modifier.weight(0.2f)
             )
 
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(2.dp)
+                    .fillMaxSize()
+                    .weight(0.6f)
             ) {
-                LeftControlPanel(
-                    isAuto = isAuto,
-                    data = data,
-                    onToggleBoolean = onToggleBoolean,
-                    onOpenDialog = onOpenDialog,
-                    onStartPress = onStartPress,
-                    onEndPress = onEndPress,
-                    modifier = Modifier.weight(0.2f)
-                )
-
-                Column(
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .weight(0.6f)
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(2.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(2.dp)
-                    ) {
-                        CenterPanel(
-                            uiState = uiState,
-                            isAuto = isAuto,
-                            onToggleBoolean = onToggleBoolean,
-                            onFunctionSelect = onFunctionSelect,
-                            onTextChange = onTextChange,
-                            onSendAll = onSendAll,
-                            modifier = Modifier.weight(0.35f)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(2.dp)
-                    ) {
-                        BottomControlsRow(
-                            isAuto = isAuto,
-                            data = data,
-                            onToggleBoolean = onToggleBoolean,
-                            onToggleAutoMode = { isAuto = !isAuto },
-                            modifier = Modifier.weight(0.65f)
-                        )
-                    }
+                    CenterPanel(
+                        uiState = uiState,
+                        isAuto = isAuto,
+                        onToggleBoolean = onToggleBoolean,
+                        onFunctionSelect = onFunctionSelect,
+                        onTextChange = onTextChange,
+                        onSendAll = onSendAll,
+                        modifier = Modifier.weight(0.35f)
+                    )
                 }
-
-                RightControlPanel(
-                    isAuto = isAuto,
-                    data = data,
-                    onToggleBoolean = onToggleBoolean,
-                    onOpenDialog = onOpenDialog,
-                    modifier = Modifier.weight(0.2f)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(2.dp)
+                ) {
+                    BottomControlsRow(
+                        isAuto = isAuto,
+                        data = data,
+                        onToggleBoolean = onToggleBoolean,
+                        onToggleAutoMode = { isAuto = !isAuto },
+                        modifier = Modifier.weight(0.65f)
+                    )
+                }
             }
+
+            RightControlPanel(
+                isAuto = isAuto,
+                data = data,
+                onToggleBoolean = onToggleBoolean,
+                onOpenDialog = onOpenDialog,
+                modifier = Modifier.weight(0.2f)
+            )
         }
 
         // Overlay chặn tương tác khi đang load
