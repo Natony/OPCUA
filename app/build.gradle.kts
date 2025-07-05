@@ -82,6 +82,15 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.cardview:cardview:1.0.0")
 
+    // Room (database)
+    implementation("androidx.room:room-runtime:2.7.2")
+    implementation("androidx.room:room-ktx:2.7.2")
+    kapt("androidx.room:room-compiler:2.7.2")
+
+    // Compose Material Icons (extended set)
+    implementation("androidx.compose.material:material-icons-core:1.8.3")
+    implementation("androidx.compose.material:material-icons-extended:1.8.3")
+
 }
 
 kapt {
