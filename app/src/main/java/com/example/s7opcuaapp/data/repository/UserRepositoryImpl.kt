@@ -151,27 +151,24 @@ class UserRepositoryImpl @Inject constructor(
             val historyId = UUID.randomUUID().toString()
             val loginTime = System.currentTimeMillis()
 
+            println("🔍 Authenticating user: '$username'") // Thêm quotes để thấy spaces
             val user = userDao.getUserByUsername(username)
 
             if (user == null) {
-                // Log failed attempt
-                loginHistoryDao.insertLoginHistory(
-                    LoginHistory(
-                        id = historyId,
-                        userId = "unknown",
-                        username = username,
-                        loginTime = loginTime,
-                        loginStatus = LoginStatus.FAILED_INVALID_CREDENTIALS
-                    )
-                )
+                println("❌ User not found: '$username'")
+                // KHÔNG insert LoginHistory với userId="unknown" vì sẽ gây foreign key error
+                // Chỉ log và return error
                 return Result.failure(Exception("Invalid credentials"))
             }
 
+            println("✅ User found: ${user.username}, active: ${user.isActive}")
+
             if (!user.isActive) {
+                println("❌ User is inactive: $username")
                 loginHistoryDao.insertLoginHistory(
                     LoginHistory(
                         id = historyId,
-                        userId = user.id,
+                        userId = user.id, // Sử dụng user.id thực tế
                         username = username,
                         loginTime = loginTime,
                         loginStatus = LoginStatus.FAILED_ACCOUNT_DISABLED
@@ -180,11 +177,21 @@ class UserRepositoryImpl @Inject constructor(
                 return Result.failure(Exception("Account is disabled"))
             }
 
+            // Debug password verification
+            val inputHash = PasswordUtils.hashPassword(password)
+            val storedHash = user.passwordHash
+            println("🔐 Password verification:")
+            println("   Input password: '$password'")
+            println("   Input hash: $inputHash")
+            println("   Stored hash: $storedHash")
+            println("   Match: ${inputHash == storedHash}")
+
             if (!PasswordUtils.verifyPassword(password, user.passwordHash)) {
+                println("❌ Password verification failed for user: $username")
                 loginHistoryDao.insertLoginHistory(
                     LoginHistory(
                         id = historyId,
-                        userId = user.id,
+                        userId = user.id, // Sử dụng user.id thực tế
                         username = username,
                         loginTime = loginTime,
                         loginStatus = LoginStatus.FAILED_INVALID_CREDENTIALS
@@ -194,6 +201,7 @@ class UserRepositoryImpl @Inject constructor(
             }
 
             // Success
+            println("✅ Authentication successful for user: $username")
             userDao.updateLastLogin(user.id, loginTime)
             loginHistoryDao.insertLoginHistory(
                 LoginHistory(
@@ -202,13 +210,14 @@ class UserRepositoryImpl @Inject constructor(
                     username = username,
                     loginTime = loginTime,
                     loginStatus = LoginStatus.SUCCESS,
-                    appVersion = "1.0.0" // TODO: Get from BuildConfig
+                    appVersion = "1.0.0"
                 )
             )
 
             Result.success(user)
         } catch (e: Exception) {
-            Log.e("UserRepository", "Authentication error", e)
+            println("💥 Authentication error: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }

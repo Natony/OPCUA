@@ -13,15 +13,29 @@ object PasswordUtils {
 
     fun hashPassword(password: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
-        return bytes.joinToString("") { "%02x".format(it) }
+        val hash = bytes.joinToString("") { "%02x".format(it) }
+        println("🔐 Password hashing:")
+        println("   Input: $password")
+        println("   Hash: $hash")
+        return hash
     }
 
     fun verifyPassword(password: String, passwordHash: String): Boolean {
-        return hashPassword(password) == passwordHash
+        val inputHash = hashPassword(password)
+        val isMatch = inputHash == passwordHash
+        println("🔍 Password verification:")
+        println("   Input: $password")
+        println("   Input hash: $inputHash")
+        println("   Stored hash: $passwordHash")
+        println("   Match: $isMatch")
+        return isMatch
     }
 
     fun isValidPassword(password: String): Boolean {
-        if (password.length < 6) return false
+        if (password.length < 6) {
+            println("❌ Password too short: ${password.length} < 6")
+            return false
+        }
 
         var hasLetter = false
         var hasDigit = false
@@ -33,7 +47,14 @@ object PasswordUtils {
             }
         }
 
-        return hasLetter && hasDigit
+        val isValid = hasLetter && hasDigit
+        println("🔍 Password validation for '$password':")
+        println("   Length: ${password.length} (${if (password.length >= 6) "✅" else "❌"})")
+        println("   Has letter: $hasLetter (${if (hasLetter) "✅" else "❌"})")
+        println("   Has digit: $hasDigit (${if (hasDigit) "✅" else "❌"})")
+        println("   Valid: $isValid")
+
+        return isValid
     }
 
     fun getPasswordStrength(password: String): PasswordStrength {

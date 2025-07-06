@@ -116,7 +116,7 @@ fun LoginScreen(
 
                 // Default credentials hint
                 Text(
-                    text = "Default: admin / 123456",
+                    text = "Default: admin / Tin123456",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -33,7 +33,14 @@ fun CommonTextField(
 ) {
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { newValue ->
+            // Nếu không phải password field, tự động trim
+            if (!isPassword) {
+                onValueChange(newValue.trim())
+            } else {
+                onValueChange(newValue) // Password giữ nguyên, không trim
+            }
+        },
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(

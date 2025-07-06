@@ -21,7 +21,11 @@ class LoginViewModel @Inject constructor(
     val uiState: StateFlow<LoginUiState> = _uiState
 
     fun onUsernameChanged(newUsername: String) {
-        _uiState.value = _uiState.value.copy(username = newUsername, errorMessage = null)
+        // Trim khoảng trắng khi user nhập
+        _uiState.value = _uiState.value.copy(
+            username = newUsername.trim(),
+            errorMessage = null
+        )
     }
 
     fun onPasswordChanged(newPassword: String) {
@@ -37,30 +41,58 @@ class LoginViewModel @Inject constructor(
     fun onLoginClicked(onSuccess: () -> Unit) {
         val current = _uiState.value
 
-        if (current.username.isBlank() || current.password.isBlank()) {
+        // Trim lại một lần nữa để chắc chắn
+        val username = current.username.trim()
+        val password = current.password.trim()
+
+        if (username.isBlank() || password.isBlank()) {
             _uiState.value = current.copy(errorMessage = "Vui lòng nhập đầy đủ thông tin")
             return
         }
 
+        println("🔑 Login attempt:")
+        println("   Username: '$username'")
+        println("   Password: '$password'")
+
         _uiState.value = current.copy(isLoading = true, errorMessage = null)
 
         viewModelScope.launch {
-            userRepository.authenticate(current.username, current.password)
-                .fold(
-                    onSuccess = { user ->
-                        // Create session
-                        sessionManager.login(user)
+            try {
+                println("🔄 Calling userRepository.authenticate...")
+                userRepository.authenticate(username, password) // Sử dụng username đã trim
+                    .fold(
+                        onSuccess = { user ->
+                            println("✅ Authentication successful:")
+                            println("   User: ${user.username}")
+                            println("   Role: ${user.role}")
+                            println("   Active: ${user.isActive}")
 
-                        _uiState.value = _uiState.value.copy(isLoading = false)
-                        onSuccess()
-                    },
-                    onFailure = { exception ->
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            errorMessage = exception.message ?: "Đăng nhập thất bại"
-                        )
-                    }
+                            // Create session
+                            val sessionId = sessionManager.login(user)
+                            println("✅ Session created: $sessionId")
+
+                            _uiState.value = _uiState.value.copy(isLoading = false)
+                            onSuccess()
+                        },
+                        onFailure = { exception ->
+                            println("❌ Authentication failed:")
+                            println("   Error: ${exception.message}")
+                            exception.printStackTrace()
+
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                errorMessage = exception.message ?: "Đăng nhập thất bại"
+                            )
+                        }
+                    )
+            } catch (e: Exception) {
+                println("💥 Login error: ${e.message}")
+                e.printStackTrace()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "Lỗi hệ thống: ${e.message}"
                 )
+            }
         }
     }
 }
