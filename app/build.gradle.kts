@@ -91,6 +91,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
+    // Preferences
+    implementation("androidx.preference:preference-ktx:1.2.1")
+
 }
 
 kapt {

@@ -1,10 +1,10 @@
 package com.example.s7opcuaapp.data.local
 
 import android.content.Context
-import android.preference.PreferenceManager
+import androidx.preference.PreferenceManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.UserCredentials
-import com.google.common.reflect.TypeToken
+import com.google.gson.reflect.TypeToken
 import com.google.gson.Gson
 import javax.inject.Inject
 

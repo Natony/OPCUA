@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +35,8 @@ fun ConfigScreen(
     onAddDevice: () -> Unit,
     onRemoveDevice: (DeviceEntity) -> Unit,
     onSelectDevice: (DeviceEntity) -> Unit,
-    onEditDevice: (DeviceEntity) -> Unit = {}
+    onEditDevice: (DeviceEntity) -> Unit = {},
+    onCancelEdit: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -50,7 +54,7 @@ fun ConfigScreen(
             )
         }
 
-        // Add Device Form
+        // Add/Edit Device Form
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -59,12 +63,29 @@ fun ConfigScreen(
                 Column(
                     modifier = Modifier.padding(12.dp)
                 ) {
-                    Text(
-                        text = "Add New Device",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (uiState.isEditMode) "Edit Device" else "Add New Device",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        if (uiState.isEditMode) {
+                            IconButton(onClick = onCancelEdit) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancel",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Compact form fields
                     OutlinedTextField(
@@ -99,7 +120,7 @@ fun ConfigScreen(
                         OutlinedTextField(
                             value = uiState.newDeviceUsername,
                             onValueChange = onNewDeviceUsernameChanged,
-                            label = { Text("Username", fontSize = 12.sp) },
+                            label = { Text("Username (Optional)", fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
@@ -107,18 +128,36 @@ fun ConfigScreen(
                         OutlinedTextField(
                             value = uiState.newDevicePassword,
                             onValueChange = onNewDevicePasswordChanged,
-                            label = { Text("Password", fontSize = 12.sp) },
+                            label = { Text("Password (Optional)", fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onAddDevice,
-                        modifier = Modifier.align(Alignment.End)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text("Add Device")
+                        if (uiState.isEditMode) {
+                            TextButton(onClick = onCancelEdit) {
+                                Text("Cancel")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
+                        Button(
+                            onClick = onAddDevice
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isEditMode) Icons.Default.Check else Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (uiState.isEditMode) "Update" else "Add Device")
+                        }
                     }
 
                     uiState.errorMessage?.let { msg ->
@@ -135,12 +174,31 @@ fun ConfigScreen(
 
         // Device List Header
         item {
-            Text(
-                text = "Saved Devices (${uiState.deviceList.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Saved Devices (${uiState.deviceList.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if (uiState.currentDevice != null) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "Current: ${uiState.currentDevice.name}",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
         }
 
         // Device List Content

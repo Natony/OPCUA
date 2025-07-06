@@ -1,9 +1,10 @@
 package com.example.s7opcuaapp.ui.navigation
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -16,13 +17,14 @@ import com.example.s7opcuaapp.ui.components.TextStatusItem
 
 /**
  * TopNavigationBar kết hợp TopStatusBar với Navigation
- * Layout: [TextStatusItem] - [Navigation Icons] - [BatteryStatusItem]
+ * Layout: [TextStatusItem] - [Navigation Icons] - [BatteryStatusItem] - [Logout]
  */
 @Composable
 fun TopNavigationBar(
     navController: NavController,
     statusValue: Int = 0,
-    batteryLevel: Int = 100
+    batteryLevel: Int = 100,
+    onLogout: () -> Unit = {}
 ) {
     val items = listOf(
         BottomNavItem.Control,
@@ -46,9 +48,9 @@ fun TopNavigationBar(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // TextStatusItem - chiếm khoảng 40% width
+            // TextStatusItem - chiếm khoảng 35% width
             Box(
-                modifier = Modifier.weight(0.4f),
+                modifier = Modifier.weight(0.35f),
                 contentAlignment = Alignment.CenterStart
             ) {
                 TextStatusItem(
@@ -107,10 +109,10 @@ fun TopNavigationBar(
                 }
             }
 
-            // BatteryStatusItem - chiếm khoảng 20% width
+            // BatteryStatusItem - chiếm khoảng 15% width
             Box(
-                modifier = Modifier.weight(0.2f),
-                contentAlignment = Alignment.CenterEnd
+                modifier = Modifier.weight(0.15f),
+                contentAlignment = Alignment.Center
             ) {
                 BatteryStatusItem(
                     level = batteryLevel,
@@ -122,6 +124,24 @@ fun TopNavigationBar(
                     ),
                     modifier = Modifier.size(48.dp)
                 )
+            }
+
+            // Logout button - chiếm khoảng 10% width
+            Box(
+                modifier = Modifier.weight(0.1f),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                IconButton(
+                    onClick = onLogout,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Logout",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }
