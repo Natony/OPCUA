@@ -72,7 +72,11 @@ fun AddEditUserDialog(
                 // FIX: Đơn giản hóa role selector để tránh experimental API
                 var expanded by remember { mutableStateOf(false) }
 
-                Box {
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     OutlinedTextField(
                         value = when (role) {
                             UserRole.ADMIN -> "Admin"
@@ -82,12 +86,15 @@ fun AddEditUserDialog(
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Vai trò") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                        },
                         modifier = Modifier
+                            .menuAnchor()
                             .fillMaxWidth()
-                            .clickable { expanded = true }
                     )
 
-                    DropdownMenu(
+                    ExposedDropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
