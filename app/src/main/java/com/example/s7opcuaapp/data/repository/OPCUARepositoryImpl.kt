@@ -1,6 +1,7 @@
 package com.example.s7opcuaapp.data.repository
 
 import android.util.Log
+import com.example.s7opcuaapp.data.local.AppDatabase
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.opcua.OPCUAClientManager
@@ -30,7 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - Better error handling và connection limiting
  */
 class OPCUARepositoryImpl(
-    private var device: DeviceEntity
+    private var device: DeviceEntity,
+    private val database: AppDatabase
 ) : S7Repository {
 
     private val _plcDataFlow = MutableStateFlow(PlcData.empty())

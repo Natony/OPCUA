@@ -1,66 +1,98 @@
 package com.example.s7opcuaapp.data.local
 
 import android.content.Context
-import android.content.SharedPreferences
+import android.preference.PreferenceManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.UserCredentials
+import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class PrefsManager @Inject constructor(
-    @ApplicationContext context: Context
-) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("s7opcua_prefs", Context.MODE_PRIVATE)
+class PrefsManager @Inject constructor(context: Context) {
+
+    private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
     private val gson = Gson()
 
     companion object {
-        private const val KEY_CREDENTIALS = "key_credentials"
-        private const val KEY_DEVICE_LIST = "key_device_list"
-        private const val KEY_CURRENT_DEVICE = "key_current_device"
+        private const val KEY_SESSION_ID        = "session_id"
+        private const val KEY_USER_ID           = "user_id"
+        private const val KEY_USERNAME          = "username"
+        private const val KEY_USER_ROLE         = "user_role"
+        private const val KEY_REMEMBER_ME       = "remember_me"
+        private const val KEY_CREDS             = "saved_credentials"
+        private const val KEY_DEVICES_JSON      = "device_list"
+        private const val KEY_CURRENT_DEVICE_ID = "current_device_id"
     }
 
-    // Credentials (login)
-    fun saveCredentials(credentials: UserCredentials) {
-        prefs.edit().putString(KEY_CREDENTIALS, gson.toJson(credentials)).apply()
+    fun saveSession(sessionId: String, userId: String, username: String, role: String) {
+        prefs.edit()
+            .putString(KEY_SESSION_ID, sessionId)
+            .putString(KEY_USER_ID, userId)
+            .putString(KEY_USERNAME, username)
+            .putString(KEY_USER_ROLE, role)
+            .apply()
     }
 
-    fun getCredentials(): UserCredentials? {
-        val json = prefs.getString(KEY_CREDENTIALS, null) ?: return null
+    fun clearSession() {
+        prefs.edit()
+            .remove(KEY_SESSION_ID)
+            .remove(KEY_USER_ID)
+            .remove(KEY_USERNAME)
+            .remove(KEY_USER_ROLE)
+            .apply()
+    }
+
+    fun getSessionId(): String? = prefs.getString(KEY_SESSION_ID, null)
+    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
+    fun getUsername(): String? = prefs.getString(KEY_USERNAME, null)
+    fun getUserRole(): String? = prefs.getString(KEY_USER_ROLE, null)
+
+    fun setRememberMe(remember: Boolean) {
+        prefs.edit().putBoolean(KEY_REMEMBER_ME, remember).apply()
+    }
+
+    fun getRememberMe(): Boolean = prefs.getBoolean(KEY_REMEMBER_ME, false)
+
+    fun saveCredentials(creds: UserCredentials) {
+        prefs.edit()
+            .putString(KEY_CREDS, gson.toJson(creds))
+            .apply()
+    }
+    fun clearCredentials() {
+        prefs.edit()
+            .remove(KEY_CREDS)
+            .apply()
+    }
+
+    fun getSavedCredentials(): UserCredentials? {
+        val json = prefs.getString(KEY_CREDS, null) ?: return null
         return gson.fromJson(json, UserCredentials::class.java)
     }
 
-    fun clearCredentials() {
-        prefs.edit().remove(KEY_CREDENTIALS).apply()
-    }
-
-    // Device list
     fun saveDeviceList(list: List<DeviceEntity>) {
-        val json = gson.toJson(list)
-        prefs.edit().putString(KEY_DEVICE_LIST, json).apply()
+        prefs.edit()
+            .putString(KEY_DEVICES_JSON, gson.toJson(list))
+            .apply()
     }
-
     fun getAllDevices(): List<DeviceEntity> {
-        val json = prefs.getString(KEY_DEVICE_LIST, null) ?: return emptyList()
+        val json = prefs.getString(KEY_DEVICES_JSON, null) ?: return emptyList()
         val type = object : TypeToken<List<DeviceEntity>>() {}.type
         return gson.fromJson(json, type)
     }
 
-    // Current device
     fun setCurrentDevice(device: DeviceEntity) {
-        prefs.edit().putString(KEY_CURRENT_DEVICE, gson.toJson(device)).apply()
+        prefs.edit()
+            .putString(KEY_CURRENT_DEVICE_ID, device.id)
+            .apply()
     }
-
     fun getCurrentDevice(): DeviceEntity? {
-        val json = prefs.getString(KEY_CURRENT_DEVICE, null) ?: return null
-        return gson.fromJson(json, DeviceEntity::class.java)
+        val all = getAllDevices()
+        val currentId = prefs.getString(KEY_CURRENT_DEVICE_ID, null) ?: return null
+        return all.find { it.id == currentId }
     }
-
     fun clearCurrentDevice() {
-        prefs.edit().remove(KEY_CURRENT_DEVICE).apply()
+        prefs.edit()
+            .remove(KEY_CURRENT_DEVICE_ID)
+            .apply()
     }
 }

@@ -1,10 +1,18 @@
 package com.example.s7opcuaapp.ui.screen.usermanager
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.s7opcuaapp.data.model.User
 import com.example.s7opcuaapp.data.model.UserRole
+import com.example.s7opcuaapp.ui.components.*
 import com.example.s7opcuaapp.viewmodel.UserManagerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -309,19 +318,23 @@ private fun UserItemCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    Chip(
+                    // FIX: Sử dụng SuggestionChip thay vì AssistChip
+                    SuggestionChip(
                         onClick = { },
-                        colors = ChipDefaults.chipColors(
+                        label = {
+                            Text(
+                                text = getRoleText(user.role),
+                                color = getRoleColor(user.role)
+                            )
+                        },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = getRoleColor(user.role).copy(alpha = 0.2f)
                         ),
-                        border = BorderStroke(1.dp, getRoleColor(user.role))
-                    ) {
-                        Text(
-                            text = getRoleText(user.role),
-                            style = MaterialTheme.typography.labelSmall,
+                        border = BorderStroke(
+                            width = 1.dp,
                             color = getRoleColor(user.role)
                         )
-                    }
+                    )
                 }
             }
 
@@ -374,7 +387,7 @@ private fun UserItemCard(
                         },
                         leadingIcon = {
                             Icon(
-                                imageVector = if (user.isActive) Icons.Default.Block else Icons.Default.CheckCircle,
+                                imageVector = if (user.isActive) Icons.Default.Close else Icons.Default.CheckCircle,
                                 contentDescription = null
                             )
                         },
@@ -384,7 +397,7 @@ private fun UserItemCard(
                         }
                     )
 
-                    Divider()
+                    HorizontalDivider()
 
                     DropdownMenuItem(
                         text = {

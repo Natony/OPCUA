@@ -1,75 +1,70 @@
 package com.example.s7opcuaapp.util
 
-import com.example.s7opcuaapp.data.model.Session
+import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.User
+import com.example.s7opcuaapp.data.model.UserRole
 import com.example.s7opcuaapp.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SessionManager @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val prefsManager: PrefsManager
 ) {
-    private val _currentSession = MutableStateFlow<Session?>(null)
-    val currentSession: StateFlow<Session?> = _currentSession
+    private val _currentUser = MutableStateFlow<User?>(null)
+    val currentUser = _currentUser.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(false)
-    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
+    private var sessionId: String? = null
 
-    suspend fun login(username: String, password: String, deviceInfo: String? = null): Result<Session> {
-        return try {
-            val result = userRepository.authenticate(username, password)
-            result.fold(
-                onSuccess = { user ->
-                    val session = userRepository.createSession(user, deviceInfo)
-                    _currentSession.value = session
-                    _isLoggedIn.value = true
-                    Result.success(session)
-                },
-                onFailure = { error ->
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun login(user: User): String {
+        val session = userRepository.createSession(user)
+        sessionId = session.sessionId
+        _currentUser.value = user
+
+        prefsManager.saveSession(
+            sessionId = session.sessionId,
+            userId = user.id,
+            username = user.username,
+            role = user.role.name
+        )
+
+        return session.sessionId
     }
 
     suspend fun logout() {
-        _currentSession.value?.let { session ->
-            userRepository.endSession(session.sessionId)
+        sessionId?.let {
+            userRepository.endSession(it)
         }
-        _currentSession.value = null
-        _isLoggedIn.value = false
+        sessionId = null
+        _currentUser.value = null
+        prefsManager.clearSession()
     }
 
     suspend fun validateSession(): Boolean {
-        val sessionId = _currentSession.value?.sessionId ?: return false
-        val validSession = userRepository.validateSession(sessionId)
-
-        if (validSession != null) {
-            _currentSession.value = validSession
-            return true
+        val savedSessionId = prefsManager.getSessionId() ?: return false
+        val session = userRepository.validateSession(savedSessionId)
+        return if (session != null) {
+            sessionId = savedSessionId
+            _currentUser.value = session.user
+            true
         } else {
-            _currentSession.value = null
-            _isLoggedIn.value = false
-            return false
+            logout()
+            false
         }
     }
 
-    fun getCurrentUser(): User? = _currentSession.value?.user
+    fun getCurrentUser(): User? = _currentUser.value
 
-    fun getSessionId(): String? = _currentSession.value?.sessionId
+    fun isLoggedIn(): Boolean = _currentUser.value != null
 
-    fun hasRole(role: String): Boolean {
-        return _currentSession.value?.user?.role?.name == role
+    fun hasRole(role: UserRole): Boolean {
+        return _currentUser.value?.role == role
     }
 
-    fun isAdmin(): Boolean = hasRole("ADMIN")
-
-    fun isOperator(): Boolean = hasRole("OPERATOR")
-
-    fun isViewer(): Boolean = hasRole("VIEWER")
+    fun canModifyDevices(): Boolean {
+        return _currentUser.value?.canModifyDevices() ?: false
+    }
 }

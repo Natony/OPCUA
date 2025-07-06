@@ -1,8 +1,5 @@
 package com.example.s7opcuaapp.data.repository
 
-import com.example.s7opcuaapp.data.local.dao.ActionStat
-import com.example.s7opcuaapp.data.local.dao.DeviceAccessStat
-import com.example.s7opcuaapp.data.local.dao.LoginStats
 import com.example.s7opcuaapp.data.model.*
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
@@ -37,3 +34,21 @@ interface LogRepository {
     // Maintenance
     suspend fun cleanupOldLogs(beforeDate: Date)
 }
+
+// Data classes cho statistics
+data class ActionStat(
+    val action: DeviceAction,
+    val count: Int
+)
+
+data class DeviceAccessStat(
+    val deviceId: String,
+    val deviceName: String,
+    val accessCount: Int
+)
+
+data class LoginStats(
+    val activeUsers: Int,
+    val totalLogins: Int,
+    val successfulLogins: Int
+)

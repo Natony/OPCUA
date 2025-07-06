@@ -1,15 +1,14 @@
 package com.example.s7opcuaapp.data.model
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
 /**
- * Model lưu thông tin thiết bị PLC:
- *  - id: duy nhất
- *  - name: tên thiết bị
- *  - ipAddress: IP
- *  - port: cổng OPC UA (mặc định 4840)
- *  - opcUsername/opcPassword: credential cho OPC UA server
- *  - useOpcUa: true nếu dùng OPC UA
+ * Model lưu thông tin thiết bị PLC với Room Entity support
  */
+@Entity(tableName = "devices")
 data class DeviceEntity(
+    @PrimaryKey
     val id: String,
     val name: String,
     val ipAddress: String,

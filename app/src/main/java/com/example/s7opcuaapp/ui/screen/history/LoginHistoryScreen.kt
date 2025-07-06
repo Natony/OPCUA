@@ -1,11 +1,18 @@
 package com.example.s7opcuaapp.ui.screen.history
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.GetApp
+import androidx.compose.material.icons.filled.Input
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -132,7 +139,7 @@ private fun LoginHistoryHeader(
                 StatItem(
                     label = "Tổng đăng nhập",
                     value = totalLogins.toString(),
-                    icon = Icons.Default.Login,
+                    icon = Icons.Default.Input,
                     color = MaterialTheme.colorScheme.primary
                 )
                 StatItem(
@@ -144,13 +151,13 @@ private fun LoginHistoryHeader(
                 StatItem(
                     label = "Thất bại",
                     value = failedLogins.toString(),
-                    icon = Icons.Default.Error,
+                    icon = Icons.Default.ErrorOutline,
                     color = Color(0xFFF44336)
                 )
                 StatItem(
                     label = "Người dùng",
                     value = activeUsers.toString(),
-                    icon = Icons.Default.Group,
+                    icon = Icons.Default.People,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
@@ -319,7 +326,7 @@ private fun LoginHistoryFilters(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Download,
+                        imageVector = Icons.Default.GetApp,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -367,7 +374,7 @@ private fun LoginHistoryItemCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Schedule,
+                        imageVector = Icons.Default.AccessTime,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -384,7 +391,7 @@ private fun LoginHistoryItemCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.PhoneAndroid,
+                            imageVector = Icons.Default.Phone,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -399,23 +406,27 @@ private fun LoginHistoryItemCard(
                 }
             }
 
-            // Duration and status
+            // Duration and status - FIX: Sửa AssistChip
             Column(
                 horizontalAlignment = Alignment.End
             ) {
-                Chip(
+                // FIX: Sử dụng SuggestionChip thay vì AssistChip
+                SuggestionChip(
                     onClick = { },
-                    colors = ChipDefaults.chipColors(
+                    label = {
+                        Text(
+                            text = item.statusText,
+                            color = Color(item.statusColor)
+                        )
+                    },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = Color(item.statusColor).copy(alpha = 0.2f)
                     ),
-                    border = BorderStroke(1.dp, Color(item.statusColor))
-                ) {
-                    Text(
-                        text = item.statusText,
-                        style = MaterialTheme.typography.labelSmall,
+                    border = BorderStroke(
+                        width = 1.dp,
                         color = Color(item.statusColor)
                     )
-                }
+                )
 
                 if (item.history.logoutTime != null) {
                     Spacer(modifier = Modifier.height(4.dp))

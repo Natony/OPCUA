@@ -1,50 +1,40 @@
 package com.example.s7opcuaapp.data.model
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "device_access_logs",
-    foreignKeys = [
-        ForeignKey(
-            entity = User::class,
-            parentColumns = ["id"],
-            childColumns = ["userId"],
-            onDelete = ForeignKey.CASCADE
-        ),
-        ForeignKey(
-            entity = DeviceEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["deviceId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
-    indices = [Index("userId"), Index("deviceId"), Index("timestamp")]
+    indices = [
+        Index(value = ["userId"]),
+        Index(value = ["deviceId"]),
+        Index(value = ["timestamp"]),
+        Index(value = ["action"])
+    ]
 )
 data class DeviceAccessLog(
-    @PrimaryKey
-    val id: String,
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
     val userId: String,
-    val username: String, // Denormalized
+    val username: String,
     val deviceId: String,
-    val deviceName: String, // Denormalized
-    val action: DeviceAction,
-    val details: String? = null, // JSON string với chi tiết action
-    val timestamp: Long,
+    val deviceName: String,
+    val action: String, // "READ", "WRITE", "CONNECT", "DISCONNECT"
+    val timestamp: Long = System.currentTimeMillis(),
+    val details: String? = null,
+    val ipAddress: String? = null,
     val success: Boolean = true,
     val errorMessage: String? = null
-)
-
-enum class DeviceAction {
-    CONNECT,
-    DISCONNECT,
-    READ_DATA,
-    WRITE_BOOL,
-    WRITE_INT,
-    EMERGENCY_STOP,
-    MODE_CHANGE,
-    FUNCTION_EXECUTE,
-    CONFIG_CHANGE
+) {
+    companion object {
+        // Các action types
+        const val ACTION_CONNECT = "CONNECT"
+        const val ACTION_DISCONNECT = "DISCONNECT"
+        const val ACTION_READ = "READ"
+        const val ACTION_WRITE = "WRITE"
+        const val ACTION_CONFIG_CHANGE = "CONFIG_CHANGE"
+        const val ACTION_LOGIN = "LOGIN"
+        const val ACTION_LOGOUT = "LOGOUT"
+    }
 }

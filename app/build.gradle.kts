@@ -82,14 +82,14 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.cardview:cardview:1.0.0")
 
-    // Room (database)
-    implementation("androidx.room:room-runtime:2.7.2")
-    implementation("androidx.room:room-ktx:2.7.2")
-    kapt("androidx.room:room-compiler:2.7.2")
+    // Room (database) - đảm bảo version đồng nhất
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
 
-    // Compose Material Icons (extended set)
-    implementation("androidx.compose.material:material-icons-core:1.8.3")
-    implementation("androidx.compose.material:material-icons-extended:1.8.3")
+    // Material Icons - sử dụng version tương thích với Compose BOM
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.compose.material:material-icons-extended")
 
 }
 

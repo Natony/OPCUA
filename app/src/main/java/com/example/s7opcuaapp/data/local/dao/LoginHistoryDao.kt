@@ -3,6 +3,7 @@ package com.example.s7opcuaapp.data.local.dao
 import androidx.room.*
 import com.example.s7opcuaapp.data.model.LoginHistory
 import com.example.s7opcuaapp.data.model.LoginStatus
+import com.example.s7opcuaapp.data.repository.LoginStats
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -37,18 +38,14 @@ interface LoginHistoryDao {
     @Query("DELETE FROM login_history WHERE loginTime < :beforeTime")
     suspend fun deleteOldHistory(beforeTime: Long)
 
+    // FIX: Đơn giản hóa query LoginStats
     @Query("""
-        SELECT COUNT(DISTINCT userId) as activeUsers, 
-               COUNT(*) as totalLogins,
-               COUNT(CASE WHEN loginStatus = 'SUCCESS' THEN 1 END) as successfulLogins
+        SELECT 
+            COUNT(DISTINCT userId) as activeUsers, 
+            COUNT(*) as totalLogins,
+            COUNT(CASE WHEN loginStatus = 'SUCCESS' THEN 1 END) as successfulLogins
         FROM login_history 
         WHERE loginTime >= :startTime
     """)
     suspend fun getLoginStats(startTime: Long): LoginStats
 }
-
-data class LoginStats(
-    val activeUsers: Int,
-    val totalLogins: Int,
-    val successfulLogins: Int
-)
