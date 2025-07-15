@@ -12,6 +12,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.Color
 
@@ -30,7 +31,8 @@ fun IntControlItem(
     intValue: Int,
     icons: List<Int>,
     onClick: () -> Unit,
-    enabled: Boolean = true,  // Thêm parameter
+    enabled: Boolean = true,
+    isProcessing: Boolean = false,  // Thêm parameter
     modifier: Modifier = Modifier
 ) {
     val iconRes = icons.getOrElse(intValue) { icons.last() }
@@ -39,22 +41,44 @@ fun IntControlItem(
         modifier = modifier
             .wrapContentHeight()
             .padding(vertical = 4.dp, horizontal = 8.dp)
-            .clickable(enabled = enabled) { onClick() },
+            .clickable(enabled = enabled && !isProcessing) { onClick() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            modifier = Modifier
-                .size(108.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            tint = if (enabled) Color.Unspecified else Color.Gray
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(108.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                tint = when {
+                    isProcessing -> Color.Yellow  // Đang xử lý
+                    !enabled -> Color.Gray       // Bị khóa
+                    else -> Color.Unspecified   // Bình thường
+                }
+            )
+
+            // Show loading indicator if processing
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .align(Alignment.Center),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
         Text(
             text = intValue.toString(),
             fontSize = 16.sp,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else Color.Gray
+            color = when {
+                isProcessing -> MaterialTheme.colorScheme.primary
+                !enabled -> Color.Gray
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         )
     }
 }

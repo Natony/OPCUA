@@ -11,5 +11,6 @@ data class ControlUiState(
     val intInputs: Map<Int, String> = emptyMap(),
     val loadingPercent: Int = 0,
     val lockedButtons: Set<Int> = emptySet(),
-    val busyButtons: Set<Int> = emptySet()
+    val busyButtons: Set<Int> = emptySet(),
+    val isProcessing: Boolean = false
 )

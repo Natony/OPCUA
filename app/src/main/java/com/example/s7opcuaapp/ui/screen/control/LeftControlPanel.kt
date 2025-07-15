@@ -22,8 +22,9 @@ fun LeftControlPanel(
     onOpenDialog: (Int) -> Unit,
     onStartPress: (Int) -> Unit,
     onEndPress: (Int) -> Unit,
-    lockedButtons: Set<Int>,    // Thêm parameter
-    busyButtons: Set<Int>,      // Thêm parameter
+    lockedButtons: Set<Int>,
+    busyButtons: Set<Int>,
+    isProcessing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -52,7 +53,8 @@ fun LeftControlPanel(
                         R.drawable.ic_pallets_minus_on
                     ),
                     onClick = { onOpenDialog(4) },
-                    enabled = (4 + 200) !in lockedButtons && (4 + 200) !in busyButtons
+                    enabled = (4 + 200) !in lockedButtons && (4 + 200) !in busyButtons,
+                    isProcessing = (4 + 200) in busyButtons
                 )
             }
 
@@ -67,7 +69,8 @@ fun LeftControlPanel(
                     iconOn = R.drawable.ic_pallet_minus_on,
                     iconOff = R.drawable.ic_pallet_minus_off,
                     onClick = { onToggleBoolean(6, data.bools.getOrNull(6)?.not() ?: false) },
-                    enabled = 6 !in lockedButtons && 6 !in busyButtons
+                    enabled = 6 !in lockedButtons && 6 !in busyButtons,
+                    isProcessing = 6 in busyButtons
                 )
             }
 
@@ -82,7 +85,8 @@ fun LeftControlPanel(
                     iconOn = R.drawable.ic_stack_pallets_a_on,
                     iconOff = R.drawable.ic_stack_pallets_a_off,
                     onClick = { onToggleBoolean(8, data.bools.getOrNull(8)?.not() ?: false) },
-                    enabled = 8 !in lockedButtons && 8 !in busyButtons
+                    enabled = 8 !in lockedButtons && 8 !in busyButtons,
+                    isProcessing = 8 in busyButtons
                 )
             }
         } else {
@@ -100,8 +104,18 @@ fun LeftControlPanel(
                     onPress = { onStartPress(0) },
                     onRelease = { onEndPress(0) },
                     enabled = 0 !in lockedButtons,
-                    busy = 0 in busyButtons
+                    isProcessing = isProcessing,
+                    busy = 0 in busyButtons,
                 )
+
+//                BoolControlItem(
+//                    value = data.bools.getOrNull(0) ?: false,
+//                    iconOn = R.drawable.ic_shuttle_forward_on,
+//                    iconOff = R.drawable.ic_shuttle_forward_off,
+//                    onClick = { onToggleBoolean(0, data.bools.getOrNull(0)?.not() ?: false) },
+//                    enabled = 0 !in lockedButtons && 0 !in busyButtons,
+//                    isProcessing = 0 in busyButtons
+//                )
             }
 
             Box(
@@ -110,14 +124,23 @@ fun LeftControlPanel(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                PressReleaseBoolControlItem(
+//                PressReleaseBoolControlItem(
+//                    value = data.bools.getOrNull(1) ?: false,
+//                    iconOn = R.drawable.ic_shuttle_reverse_on,
+//                    iconOff = R.drawable.ic_shuttle_reverse_off,
+//                    onPress = { onStartPress(1) },
+//                    onRelease = { onEndPress(1) },
+//                    enabled = 1 !in lockedButtons,
+//                    busy = 1 in busyButtons,
+//                )
+
+                BoolControlItem(
                     value = data.bools.getOrNull(1) ?: false,
                     iconOn = R.drawable.ic_shuttle_reverse_on,
                     iconOff = R.drawable.ic_shuttle_reverse_off,
-                    onPress = { onStartPress(1) },
-                    onRelease = { onEndPress(1) },
-                    enabled = 1 !in lockedButtons,
-                    busy = 1 in busyButtons
+                    onClick = { onToggleBoolean(1, data.bools.getOrNull(1)?.not() ?: false) },
+                    enabled = 1 !in lockedButtons && 1 !in busyButtons,
+                    isProcessing = 1 in busyButtons
                 )
             }
         }

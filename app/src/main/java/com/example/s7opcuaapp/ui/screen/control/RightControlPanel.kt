@@ -21,7 +21,8 @@ fun RightControlPanel(
     onOpenDialog: (Int) -> Unit,
     modifier: Modifier = Modifier,
     lockedButtons: Set<Int>,
-    busyButtons: Set<Int>
+    busyButtons: Set<Int>,
+    isProcessing: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -46,7 +47,8 @@ fun RightControlPanel(
                         R.drawable.ic_pallets_plus_on
                     ),
                     onClick = { onOpenDialog(3) },
-                    enabled = (3 + 200) !in lockedButtons && (3 + 200) !in busyButtons
+                    enabled = (3 + 200) !in lockedButtons && (3 + 200) !in busyButtons,
+                    isProcessing = (3 + 200) in busyButtons
                 )
             }
             Box(
@@ -58,7 +60,8 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_pallet_plus_on,
                     iconOff = R.drawable.ic_pallet_plus_off,
                     onClick = { onToggleBoolean(7, data.bools.getOrNull(7)?.not() ?: false) },
-                    enabled = 7 !in lockedButtons && 7 !in busyButtons
+                    enabled = 7 !in lockedButtons && 7 !in busyButtons,
+                    isProcessing = 9 in busyButtons
                 )
             }
             Box(
@@ -70,7 +73,8 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_stack_pallets_b_on,
                     iconOff = R.drawable.ic_stack_pallets_b_off,
                     onClick = { onToggleBoolean(9, data.bools.getOrNull(9)?.not() ?: false) },
-                    enabled = 9 !in lockedButtons && 9 !in busyButtons
+                    enabled = 9 !in lockedButtons && 9 !in busyButtons,
+                    isProcessing = 9 in busyButtons
                 )
             }
         } else {
@@ -83,7 +87,8 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_shuttle_up_on,
                     iconOff = R.drawable.ic_shuttle_up_off,
                     onClick = { onToggleBoolean(2, data.bools.getOrNull(2)?.not() ?: false) },
-                    enabled = 2 !in lockedButtons && 2 !in busyButtons
+                    enabled = 2 !in lockedButtons && 2 !in busyButtons,
+                    isProcessing = 2 in busyButtons
                 )
             }
             Box(
@@ -95,7 +100,8 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_shuttle_down_on,
                     iconOff = R.drawable.ic_shuttle_down_off,
                     onClick = { onToggleBoolean(3, data.bools.getOrNull(3)?.not() ?: false) },
-                    enabled = 3 !in lockedButtons && 3 !in busyButtons
+                    enabled = 3 !in lockedButtons && 3 !in busyButtons,
+                    isProcessing = 3 in busyButtons
                 )
             }
         }

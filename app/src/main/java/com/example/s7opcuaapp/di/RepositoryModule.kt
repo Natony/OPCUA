@@ -5,6 +5,7 @@ import com.example.s7opcuaapp.data.local.AppDatabase
 import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.repository.*
+import com.example.s7opcuaapp.util.ButtonLockConfig
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import dagger.Module
 import dagger.Provides
@@ -28,6 +29,12 @@ object RepositoryModule {
         performanceMonitor: PerformanceMonitor
     ): PlcDataBuffer {
         return PlcDataBuffer(performanceMonitor)
+    }
+
+    @Provides
+    @Singleton
+    fun provideButtonLockConfig(): ButtonLockConfig {
+        return ButtonLockConfig()
     }
 
     @Provides

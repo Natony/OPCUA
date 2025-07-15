@@ -14,8 +14,11 @@ fun BottomControlsRow(
     isAuto: Boolean,
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
-    onToggleAutoMode: () -> Unit, // Thêm parameter này
-    modifier: Modifier = Modifier
+    onToggleAutoMode: () -> Unit,
+    modifier: Modifier = Modifier,
+    lockedButtons: Set<Int>,
+    busyButtons: Set<Int>,
+    isProcessing: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -30,7 +33,7 @@ fun BottomControlsRow(
                 .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
+            // Power button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -42,10 +45,13 @@ fun BottomControlsRow(
                     value = data.bools.getOrNull(4) ?: false,
                     iconOn = R.drawable.ic_power_on,
                     iconOff = R.drawable.ic_power_off,
-                    onClick = { onToggleBoolean(4, data.bools.getOrNull(4)?.not() ?: false) }
+                    onClick = { onToggleBoolean(4, data.bools.getOrNull(4)?.not() ?: false) },
+                    enabled = 4 !in lockedButtons,
+                    isProcessing = 4 in busyButtons
                 )
             }
 
+            // FIFO/LIFO button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -57,10 +63,13 @@ fun BottomControlsRow(
                     value = data.bools.getOrNull(11) ?: false,
                     iconOn = R.drawable.ic_lifo,
                     iconOff = R.drawable.ic_fifo,
-                    onClick = { onToggleBoolean(11, data.bools.getOrNull(11)?.not() ?: false) }
+                    onClick = { onToggleBoolean(11, data.bools.getOrNull(11)?.not() ?: false) },
+                    enabled = 11 !in lockedButtons,
+                    isProcessing = 11 in busyButtons
                 )
             }
 
+            // Auto/Manual mode button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -72,10 +81,11 @@ fun BottomControlsRow(
                     value = isAuto,
                     iconOn = R.drawable.ic_mode_auto,
                     iconOff = R.drawable.ic_mode_manual,
-                    onClick = onToggleAutoMode // Sửa thành callback
+                    onClick = onToggleAutoMode,
+                    enabled = true,  // Mode switch always enabled
+                    isProcessing = false  // Mode switch is local, no processing
                 )
             }
-
         }
 
         Column(
@@ -84,11 +94,12 @@ fun BottomControlsRow(
                 .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Shuttle status (read-only)
             Box(
                 modifier = modifier
                     .size(108.dp)
                     .fillMaxSize()
-                    .weight(0.6f),
+                    .weight(0.7f),
                 contentAlignment = Alignment.Center
             ) {
                 BooleanStatusItem(
@@ -99,26 +110,31 @@ fun BottomControlsRow(
                 )
             }
 
+            // Emergency stop button
             Box(
                 modifier = modifier
                     .size(78.dp)
-                    .weight(0.4f),
+                    .weight(0.3f),
                 contentAlignment = Alignment.Center
             ) {
                 BoolControlItem(
                     value = data.bools.getOrNull(10) ?: false,
                     iconOn = R.drawable.ic_emergency_stop,
                     iconOff = R.drawable.ic_emergency_stop,
-                    onClick = { onToggleBoolean(10, data.bools.getOrNull(10)?.not() ?: false) }
+                    onClick = { onToggleBoolean(10, data.bools.getOrNull(10)?.not() ?: false) },
+                    enabled = 10 !in lockedButtons,
+                    isProcessing = 10 in busyButtons
                 )
             }
         }
+
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Buzzer button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -130,10 +146,13 @@ fun BottomControlsRow(
                     value = data.bools.getOrNull(5) ?: false,
                     iconOn = R.drawable.ic_buzzer_on,
                     iconOff = R.drawable.ic_buzzer_off,
-                    onClick = { onToggleBoolean(5, data.bools.getOrNull(5)?.not() ?: false) }
+                    onClick = { onToggleBoolean(5, data.bools.getOrNull(5)?.not() ?: false) },
+                    enabled = 5 !in lockedButtons,
+                    isProcessing = 5 in busyButtons
                 )
             }
 
+            // Direction A/B button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -145,10 +164,13 @@ fun BottomControlsRow(
                     value = data.bools.getOrNull(13) ?: false,
                     iconOn = R.drawable.ic_direction_a,
                     iconOff = R.drawable.ic_direction_b,
-                    onClick = { onToggleBoolean(13, data.bools.getOrNull(13)?.not() ?: false) }
+                    onClick = { onToggleBoolean(13, data.bools.getOrNull(13)?.not() ?: false) },
+                    enabled = 13 !in lockedButtons,
+                    isProcessing = 13 in busyButtons
                 )
             }
 
+            // Count pallet button
             Box(
                 modifier = modifier
                     .weight(1f)
@@ -158,14 +180,14 @@ fun BottomControlsRow(
             ) {
                 CountPalletItem(
                     count = data.ints.getOrNull(2) ?: 0,
-                    isPressed = data.bools.getOrNull(14) ?: false, // Sử dụng bool[13]
-                    isManualMode = !isAuto, // Enable khi KHÔNG phải auto mode
+                    isPressed = data.bools.getOrNull(14) ?: false,
+                    isManualMode = !isAuto,
                     onClick = {
-                        // Chỉ cho phép nhấn khi đang ở manual mode
                         if (!isAuto) {
                             onToggleBoolean(14, data.bools.getOrNull(14)?.not() ?: false)
                         }
-                    }
+                    },
+                    isProcessing = 14 in busyButtons
                 )
             }
         }

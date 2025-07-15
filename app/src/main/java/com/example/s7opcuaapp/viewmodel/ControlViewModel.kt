@@ -9,6 +9,7 @@ import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.repository.OptimizedOPCUARepositoryImpl
 import com.example.s7opcuaapp.data.repository.S7Repository
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
+import com.example.s7opcuaapp.util.ButtonLockConfig
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -21,13 +22,13 @@ import javax.inject.Inject
 class ControlViewModel @Inject constructor(
     private val prefsManager: PrefsManager,
     repository: S7Repository,
-    private val performanceMonitor: PerformanceMonitor // ADD THIS
+    private val performanceMonitor: PerformanceMonitor,
+    private val buttonLockConfig: ButtonLockConfig
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ControlUiState())
     val uiState: StateFlow<ControlUiState> = _uiState.asStateFlow()
 
-    // CHANGE THIS LINE
     private val repoImpl = repository as OptimizedOPCUARepositoryImpl
     private val functionCodeNodeIndex = 14
 
@@ -36,18 +37,21 @@ class ControlViewModel @Inject constructor(
     private var connectionStarted = false
     private var dataObservationJob: Job? = null
 
-    // Thêm throttling cho UI updates
-    private val uiUpdateThrottle = 500L // 500ms between UI updates
+    // UI update throttling
+    private val uiUpdateThrottle = 300L
     private var lastUiUpdateTime = 0L
 
+    // Global processing lock - chỉ cho phép 1 operation tại 1 thời điểm
+    private val globalProcessingLock = Mutex()
+    private var currentProcessingButton: Int? = null
+
     companion object {
-        // Offset để phân biệt các loại button
         const val BOOL_OFFSET = 0
         const val INT_OFFSET = 200
     }
-    // Track UI recomposition
+
     init {
-        // Monitor UI state changes for recomposition tracking
+        // Monitor UI state changes
         viewModelScope.launch {
             snapshotFlow { uiState.value }
                 .collect {
@@ -69,9 +73,6 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Start connection with optimized data flow
-     */
     fun startConnection() {
         viewModelScope.launch {
             connectionMutex.withLock {
@@ -81,22 +82,15 @@ class ControlViewModel @Inject constructor(
                 }
 
                 connectionStarted = true
-                Log.d("ControlVM", "🚀 Starting optimized connection...")
+                Log.d("ControlVM", "🚀 Starting connection...")
 
                 try {
-                    // Update device info
                     prefsManager.getCurrentDevice()?.let { device ->
                         repoImpl.updateDevice(device)
-                        Log.d("ControlVM", "Updated device: ${device.name}")
                     }
 
-                    // Reset state
                     _uiState.update { it.copy(loadingPercent = 0, errorMessage = null) }
-
-                    // Start repository
                     repoImpl.start()
-
-                    // Start observing optimized data flow
                     startOptimizedDataObservation()
 
                 } catch (e: Exception) {
@@ -108,9 +102,6 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Optimized data observation with selective updates
-     */
     private suspend fun startOptimizedDataObservation() {
         dataObservationJob?.cancel()
 
@@ -128,144 +119,239 @@ class ControlViewModel @Inject constructor(
                     val now = System.currentTimeMillis()
                     if (now - lastUiUpdateTime >= uiUpdateThrottle) {
                         lastUiUpdateTime = now
-
-                        // Tính toán locked buttons
-                        val currentBusy = _uiState.value.busyButtons
-                        val lockedButtons = calculateLockedButtons(data, currentBusy)
-
-                        _uiState.update {
-                            it.copy(
-                                plcData = data,
-                                errorMessage = null,
-                                lockedButtons = lockedButtons
-                            )
-                        }
-                        Log.v("ControlVM", "UI updated with PLC data")
+                        updateUIWithPlcData(data)
                     }
                 }
         }
-    }    /**
-     * Stop connection
-     */
-    fun stopConnection() {
-        viewModelScope.launch {
-            connectionMutex.withLock {
-                if (!connectionStarted) {
-                    Log.d("ControlVM", "⚠️ Connection not started")
-                    return@withLock
-                }
+    }
 
-                Log.d("ControlVM", "🛑 Stopping connection...")
-                connectionStarted = false
+    private suspend fun updateUIWithPlcData(data: PlcData) {
+        // Lấy active buttons từ PLC data
+        val activeButtons = getActiveButtons(data)
 
-                try {
-                    dataObservationJob?.cancel()
-                    dataObservationJob = null
-                    repoImpl.stop()
-                    _uiState.update { it.copy(loadingPercent = 0) }
-                    Log.d("ControlVM", "✅ Connection stopped")
-                } catch (e: Exception) {
-                    Log.e("ControlVM", "Error stopping connection", e)
-                }
+        // Tính toán locked buttons
+        val lockedButtons = if (currentProcessingButton != null) {
+            // Nếu đang xử lý, khóa tất cả nút trừ nút đang xử lý
+            val allButtons = (0..14).toSet() + (203..230).toSet()
+            currentProcessingButton?.let {
+                allButtons - it
+            } ?: allButtons
+        } else {
+            // Nếu không đang xử lý, sử dụng button lock config bình thường
+            val busyButtons = if (currentProcessingButton != null) {
+                setOf(currentProcessingButton!!)
+            } else {
+                emptySet()
+            }
+            buttonLockConfig.getLockedButtons(activeButtons, busyButtons)
+        }
+
+        _uiState.update {
+            it.copy(
+                plcData = data,
+                errorMessage = null,
+                lockedButtons = lockedButtons,
+                busyButtons = if (currentProcessingButton != null) setOf(currentProcessingButton!!) else emptySet()
+            )
+        }
+    }
+
+    private fun getActiveButtons(data: PlcData): Set<Int> {
+        val active = mutableSetOf<Int>()
+
+        // Check bool buttons
+        data.bools.forEachIndexed { index, value ->
+            if (value) active.add(index)
+        }
+
+        // Check int buttons (3-4) for non-zero values
+        listOf(3, 4).forEach { index ->
+            if ((data.ints.getOrNull(index) ?: 0) != 0) {
+                active.add(index + INT_OFFSET)
             }
         }
+
+        return active
     }
 
     /**
-     * Restart connection
+     * Generic button action với global lock
      */
-    fun restartConnection() {
-        Log.d("ControlVM", "🔄 Restarting connection...")
-        viewModelScope.launch {
-            stopConnection()
-            delay(3000) // Wait for cleanup
-            startConnection()
+    private suspend fun executeButtonAction(
+        buttonIndex: Int,
+        actionName: String,
+        action: suspend () -> Unit
+    ): Boolean {
+        // Try to acquire global lock
+        if (!globalProcessingLock.tryLock()) {
+            Log.d("ControlVM", "❌ Cannot $actionName button $buttonIndex - another operation in progress")
+            return false
         }
-    }
 
-    private fun calculateLockedButtons(data: PlcData, busyButtons: Set<Int>): Set<Int> {
-        val locked = mutableSetOf<Int>()
+        try {
+            val state = _uiState.value
 
-        // Tìm nút đang active
-        var hasActiveButton = false
-        var activeButtonIndex: Int? = null
-
-        // Check manual mode buttons (0-3)
-        for (i in 0..3) {
-            if (data.bools.getOrNull(i) == true || i in busyButtons) {
-                hasActiveButton = true
-                activeButtonIndex = i
-                break
+            // Check basic conditions
+            if (!connectionStarted) {
+                Log.d("ControlVM", "❌ Cannot $actionName - not connected")
+                return false
             }
-        }
 
-        // Check auto mode bool buttons (6-9)
-        if (!hasActiveButton) {
-            for (i in 6..9) {
-                if (data.bools.getOrNull(i) == true || i in busyButtons) {
-                    hasActiveButton = true
-                    activeButtonIndex = i
-                    break
-                }
+            // Check if button is already locked
+            if (buttonIndex in state.lockedButtons) {
+                Log.d("ControlVM", "❌ Button $buttonIndex is locked")
+                return false
             }
-        }
 
-        // Check int buttons (3-4) - cần map với INT_OFFSET
-        if (!hasActiveButton) {
-            for (i in 3..4) {
-                if ((data.ints.getOrNull(i) ?: 0) != 0 || (i + INT_OFFSET) in busyButtons) {
-                    hasActiveButton = true
-                    activeButtonIndex = i + INT_OFFSET
-                    break
-                }
-            }
-        }
+            // Mark this button as processing
+            currentProcessingButton = buttonIndex
 
-        // Nếu có nút active, khóa tất cả trừ nút đó
-        if (hasActiveButton && activeButtonIndex != null) {
-            // Khóa tất cả bool buttons
-            locked.addAll(0..14)
-            // Khóa tất cả int buttons (với offset)
-            locked.addAll((0..30).map { it + INT_OFFSET })
-
-            // Mở khóa nút đang active
-            locked.remove(activeButtonIndex)
-        }
-
-        return locked
-    }
-
-    // UI Actions with performance tracking
-    fun onToggleBoolean(index: Int, newValue: Boolean) {
-        val state = _uiState.value
-        if (state.isWriting || !connectionStarted) return
-
-        // Check if button is locked
-        if (index in state.lockedButtons) {
-            Log.d("ControlVM", "Button $index is locked")
-            return
-        }
-
-        viewModelScope.launch(Dispatchers.IO) {
-            // Mark button as busy
-            _uiState.update {
-                it.copy(
+            // Update UI immediately to show all other buttons as locked
+            _uiState.update { currentState ->
+                val allButtons = (0..14).toSet() + (203..230).toSet()
+                currentState.copy(
                     isWriting = true,
-                    errorMessage = null,
-                    busyButtons = it.busyButtons + index
+                    busyButtons = setOf(buttonIndex),
+                    lockedButtons = allButtons - buttonIndex // Lock all except current
                 )
             }
 
-            try {
+            Log.d("ControlVM", "🔄 Starting $actionName for button $buttonIndex")
+
+            // Execute the action
+            action()
+
+            Log.d("ControlVM", "✅ Completed $actionName for button $buttonIndex")
+            return true
+
+        } catch (e: Exception) {
+            Log.e("ControlVM", "❌ Error in $actionName for button $buttonIndex", e)
+            _uiState.update { it.copy(errorMessage = "Operation failed: ${e.message}") }
+            return false
+
+        } finally {
+            // Clear processing state
+            currentProcessingButton = null
+
+            // Update UI state
+            _uiState.update { it.copy(isWriting = false) }
+
+            // Release global lock
+            globalProcessingLock.unlock()
+
+            // Force immediate UI update
+            updateUIWithPlcData(_uiState.value.plcData)
+        }
+    }
+
+    fun onToggleBoolean(index: Int, newValue: Boolean) {
+        viewModelScope.launch {
+            executeButtonAction(index, "toggle") {
                 repoImpl.writeBoolean(index, newValue)
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Write failed: ${e.message}") }
-            } finally {
-                _uiState.update {
-                    it.copy(
-                        isWriting = false,
-                        busyButtons = it.busyButtons - index
+            }
+        }
+    }
+
+    fun onStartPress(index: Int) {
+        viewModelScope.launch {
+            // Không dùng executeButtonAction cho press/release
+            // vì cần giữ lock trong suốt quá trình press
+            if (!globalProcessingLock.tryLock()) {
+                Log.d("ControlVM", "❌ Cannot press button $index - another operation in progress")
+                return@launch
+            }
+
+            try {
+                val state = _uiState.value
+
+                if (!connectionStarted || index in state.lockedButtons) {
+                    Log.d("ControlVM", "❌ Cannot press button $index")
+                    return@launch
+                }
+
+                // Mark as processing
+                currentProcessingButton = index
+
+                // Update UI
+                _uiState.update { currentState ->
+                    val allButtons = (0..14).toSet() + (203..230).toSet()
+                    currentState.copy(
+                        isWriting = true,
+                        busyButtons = setOf(index),
+                        lockedButtons = allButtons - index
                     )
+                }
+
+                // Write true
+                repoImpl.writeBoolean(index, true)
+                Log.d("ControlVM", "✅ Button $index pressed")
+
+                // KHÔNG release lock ở đây - giữ cho đến khi release
+
+            } catch (e: Exception) {
+                Log.e("ControlVM", "❌ Error in onStartPress", e)
+                // Nếu có lỗi, cleanup
+                currentProcessingButton = null
+                _uiState.update { it.copy(isWriting = false) }
+                globalProcessingLock.unlock()
+            }
+        }
+    }
+
+    fun onEndPress(index: Int) {
+        viewModelScope.launch {
+            try {
+                // Chỉ xử lý nếu đây là button đang được press
+                if (currentProcessingButton == index && connectionStarted) {
+                    // Write false
+                    repoImpl.writeBoolean(index, false)
+                    Log.d("ControlVM", "✅ Button $index released")
+                }
+            } catch (e: Exception) {
+                Log.e("ControlVM", "❌ Error in onEndPress", e)
+            } finally {
+                // Always cleanup nếu đây là button đang xử lý
+                if (currentProcessingButton == index) {
+                    currentProcessingButton = null
+                    _uiState.update { it.copy(isWriting = false) }
+
+                    // Unlock để các button khác có thể dùng
+                    try {
+                        globalProcessingLock.unlock()
+                    } catch (e: Exception) {
+                        // Ignore if not locked
+                    }
+
+                    // Force UI update
+                    updateUIWithPlcData(_uiState.value.plcData)
+                }
+            }
+        }
+    }
+
+    fun confirmNumber(index: Int, value: Int) {
+        viewModelScope.launch {
+            val buttonIndex = index + INT_OFFSET
+            executeButtonAction(buttonIndex, "write int") {
+                repoImpl.writeInt(index, value)
+            }
+            _uiState.update { it.copy(openDialogForIndex = null) }
+        }
+    }
+
+    fun onSendAll() {
+        viewModelScope.launch {
+            // Use a special index for "send all" operation
+            executeButtonAction(999, "send all") {
+                // Write function code
+                repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
+
+                // Write coordinate values
+                listOf(5, 6, 7, 8, 9, 10).forEach { idx ->
+                    val txt = uiState.value.intInputs[idx]
+                        ?: uiState.value.plcData.ints.getOrNull(idx)?.toString() ?: "0"
+                    val value = txt.toIntOrNull() ?: 0
+                    repoImpl.writeInt(idx, value)
                 }
             }
         }
@@ -281,31 +367,12 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    fun onSendAll() {
-        if (_uiState.value.isWriting || !connectionStarted) return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isWriting = true, errorMessage = null) }
-            try {
-                // Write function code
-                repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
-
-                // Write coordinate values
-                listOf(5, 6, 7, 8, 9, 10).forEach { idx ->
-                    val txt = uiState.value.intInputs[idx]
-                        ?: uiState.value.plcData.ints.getOrNull(idx)?.toString() ?: "0"
-                    val value = txt.toIntOrNull() ?: 0
-                    repoImpl.writeInt(idx, value)
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Send failed: ${e.message}") }
-            } finally {
-                _uiState.update { it.copy(isWriting = false) }
-            }
-        }
-    }
-
     fun openNumberDialog(index: Int) {
+        // Check if we can open dialog
+        if (currentProcessingButton != null) {
+            Log.d("ControlVM", "Cannot open dialog - operation in progress")
+            return
+        }
         _uiState.update { it.copy(openDialogForIndex = index) }
     }
 
@@ -313,60 +380,32 @@ class ControlViewModel @Inject constructor(
         _uiState.update { it.copy(openDialogForIndex = null) }
     }
 
-    fun confirmNumber(index: Int, value: Int) {
-        val state = _uiState.value
-        if (state.isWriting || !connectionStarted) return
+    fun stopConnection() {
+        viewModelScope.launch {
+            connectionMutex.withLock {
+                if (!connectionStarted) return@withLock
 
-        // Check if int button is locked (với offset)
-        if ((index + INT_OFFSET) in state.lockedButtons) {
-            Log.d("ControlVM", "Int button $index is locked")
-            return
-        }
+                Log.d("ControlVM", "🛑 Stopping connection...")
+                connectionStarted = false
 
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update {
-                it.copy(
-                    isWriting = true,
-                    openDialogForIndex = null,
-                    errorMessage = null,
-                    busyButtons = it.busyButtons + (index + INT_OFFSET)
-                )
-            }
-
-            try {
-                repoImpl.writeInt(index, value)
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Write failed: ${e.message}") }
-            } finally {
-                _uiState.update {
-                    it.copy(
-                        isWriting = false,
-                        busyButtons = it.busyButtons - (index + INT_OFFSET)
-                    )
+                try {
+                    dataObservationJob?.cancel()
+                    dataObservationJob = null
+                    repoImpl.stop()
+                    currentProcessingButton = null
+                    _uiState.update { it.copy(loadingPercent = 0) }
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Error stopping connection", e)
                 }
             }
         }
     }
 
-    fun onStartPress(index: Int) {
-        if (!connectionStarted) return
+    fun restartConnection() {
         viewModelScope.launch {
-            try {
-                repoImpl.writeBoolean(index, true)
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Error in onStartPress", e)
-            }
-        }
-    }
-
-    fun onEndPress(index: Int) {
-        if (!connectionStarted) return
-        viewModelScope.launch {
-            try {
-                repoImpl.writeBoolean(index, false)
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Error in onEndPress", e)
-            }
+            stopConnection()
+            delay(3000)
+            startConnection()
         }
     }
 
@@ -376,10 +415,7 @@ class ControlViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        Log.d("ControlVM", "ViewModel cleared")
         dataObservationJob?.cancel()
-
-        // Stop in GlobalScope since viewModelScope is cancelled
         GlobalScope.launch {
             try {
                 repoImpl.stop()

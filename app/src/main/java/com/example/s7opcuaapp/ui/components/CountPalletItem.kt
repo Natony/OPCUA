@@ -22,12 +22,14 @@ import androidx.compose.ui.unit.sp
  * @param isManualMode True khi đang ở chế độ manual
  * @param onClick Callback khi nhấn nút (chỉ hoạt động ở manual mode)
  */
+
 @Composable
 fun CountPalletItem(
     count: Int,
     isPressed: Boolean,
     isManualMode: Boolean,
     onClick: () -> Unit,
+    isProcessing: Boolean = false,  // Thêm parameter
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -41,38 +43,46 @@ fun CountPalletItem(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = when {
+                    isProcessing -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = count.toString(),
-                    fontSize = 20.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = when {
+                        isProcessing -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.primary
+                    }
                 )
             }
         }
 
-        // Nút đếm - chỉ enable khi manual mode
+        // Nút đếm - chỉ enable khi manual mode và không đang xử lý
         Box(
             modifier = Modifier
                 .size(78.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .weight(0.3f)
                 .background(
-                    if (!isManualMode) Color.Gray.copy(alpha = 0.3f)
-                    else if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    else Color.Transparent
+                    when {
+                        isProcessing -> Color.Yellow.copy(alpha = 0.3f)
+                        !isManualMode -> Color.Gray.copy(alpha = 0.3f)
+                        isPressed -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        else -> Color.Transparent
+                    }
                 )
                 .then(
-                    if (isManualMode) {
+                    if (isManualMode && !isProcessing) {
                         Modifier.clickable { onClick() }
                     } else {
                         Modifier
@@ -87,12 +97,21 @@ fun CountPalletItem(
                 ),
                 contentDescription = "Count Pallet",
                 modifier = Modifier.size(56.dp),
-                tint = if (isManualMode) {
-                    Color.Unspecified
-                } else {
-                    Color.Gray
+                tint = when {
+                    isProcessing -> Color.Yellow
+                    !isManualMode -> Color.Gray
+                    else -> Color.Unspecified
                 }
             )
+
+            // Show loading indicator if processing
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

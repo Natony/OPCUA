@@ -35,6 +35,7 @@ fun ControlScreen(
 
     val lockedButtons = uiState.lockedButtons
     val busyButtons = uiState.busyButtons
+    val isProcessing = uiState.isProcessing
 
     // Dialog nhập số
     uiState.openDialogForIndex?.let { idx ->
@@ -62,6 +63,7 @@ fun ControlScreen(
                 onEndPress = onEndPress,
                 lockedButtons = lockedButtons,
                 busyButtons = busyButtons,
+                isProcessing = isProcessing,
                 modifier = Modifier.weight(0.2f),
 
             )
@@ -103,8 +105,11 @@ fun ControlScreen(
                         data = data,
                         onToggleBoolean = onToggleBoolean,
                         onToggleAutoMode = { isAuto = !isAuto },
-                        modifier = Modifier.weight(0.7f)
-                    )
+                        modifier = Modifier.weight(0.7f),
+                        lockedButtons = lockedButtons,
+                        busyButtons = busyButtons,
+                        isProcessing = isProcessing
+                        )
                 }
             }
 
@@ -115,6 +120,7 @@ fun ControlScreen(
                 onOpenDialog = onOpenDialog,
                 lockedButtons = lockedButtons,
                 busyButtons = busyButtons,
+                isProcessing = isProcessing,
                 modifier = Modifier.weight(0.2f)
             )
         }

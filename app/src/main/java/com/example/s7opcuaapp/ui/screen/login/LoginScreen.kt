@@ -23,7 +23,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
-    ) {
+    ) { 
         Card(
             modifier = Modifier
                 .widthIn(max = 400.dp)

@@ -59,7 +59,7 @@ fun TopNavigationBar(
             // TextStatusItem - chiếm khoảng 35% width
             Box(
                 modifier = Modifier.weight(0.3f),
-                contentAlignment = Alignment.CenterEnd
+                contentAlignment = Alignment.Center
             ) {
                 TextStatusItem(
                     label = "",
@@ -87,7 +87,7 @@ fun TopNavigationBar(
 
             // Navigation Icons - chiếm khoảng 30% width
             Row(
-                modifier = Modifier.weight(0.3f),
+                modifier = Modifier.weight(0.2f),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {

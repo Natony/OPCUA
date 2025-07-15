@@ -57,18 +57,9 @@ fun HomeScreen(
                 Image(
                     painter = painterResource(id = R.drawable.ic_home_image),
                     contentDescription = "Home Image",
-                    modifier = Modifier.size(100.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "OPC UA Control System",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Welcome to the control panel",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
                 )
                 currentUser?.let { user ->
                     Spacer(modifier = Modifier.height(8.dp))
