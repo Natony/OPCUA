@@ -7,7 +7,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.ui.components.*
 
 @Composable
@@ -250,8 +252,26 @@ fun CenterPanel(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
-                Button(onClick = onSendAll, enabled = !isWriting) { Text("CHẠY") }
+            Box(
+                modifier = Modifier
+                    .weight(0.5f)
+                    .padding(horizontal = 8.dp),    // cho khoảng cách 2 bên
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = onSendAll,
+                    enabled = !isWriting,
+                    modifier = Modifier.fillMaxWidth()  // cho button trải hết khung Box
+                ) {
+                    Text(
+                        "CHẠY",
+                        modifier = Modifier
+                            .fillMaxWidth()               // văn bản cũng trải hết
+                            .wrapContentWidth(Alignment.Center as Alignment.Horizontal), // và căn giữa
+                        fontSize = 16.sp,                // tăng cỡ chữ
+                        fontWeight = FontWeight.Bold     // làm chữ đậm hơn
+                    )
+                }
             }
         }
     }

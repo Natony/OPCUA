@@ -84,7 +84,8 @@ class ButtonLockConfig @Inject constructor() {
 
             // Add cross-lock rules
             crossLockRules[buttonIndex]?.let { toLock ->
-                locked.addAll(toLock)
+                // Thêm dòng này để đảm bảo không tự khóa chính mình
+                locked.addAll(toLock - buttonIndex)
             }
         }
 
@@ -93,9 +94,11 @@ class ButtonLockConfig @Inject constructor() {
             locked.removeAll(priorityButtons - activeButtons)
         }
 
+        // Thêm: Đảm bảo không có button nào tự khóa chính nó
+        locked.removeAll(activeOrBusy)
+
         return locked
     }
-
     /**
      * Check if a button should lock immediately on click
      */

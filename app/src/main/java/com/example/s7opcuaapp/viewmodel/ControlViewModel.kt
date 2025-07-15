@@ -38,7 +38,7 @@ class ControlViewModel @Inject constructor(
     private var dataObservationJob: Job? = null
 
     // UI update throttling
-    private val uiUpdateThrottle = 300L
+    private val uiUpdateThrottle = 200L
     private var lastUiUpdateTime = 0L
 
     // Global processing lock - chỉ cho phép 1 operation tại 1 thời điểm
@@ -246,33 +246,61 @@ class ControlViewModel @Inject constructor(
 
     fun onToggleBoolean(index: Int, newValue: Boolean) {
         viewModelScope.launch {
-            executeButtonAction(index, "toggle") {
-                repoImpl.writeBoolean(index, newValue)
+            // Xử lý đặc biệt cho Emergency Stop
+            if (index == 10) { // Emergency stop
+                executeEmergencyStop(newValue)
+            } else {
+                executeButtonAction(index, "toggle") {
+                    repoImpl.writeBoolean(index, newValue)
+                }
             }
         }
     }
 
-    fun onStartPress(index: Int) {
-        viewModelScope.launch {
-            // Không dùng executeButtonAction cho press/release
-            // vì cần giữ lock trong suốt quá trình press
-            if (!globalProcessingLock.tryLock()) {
-                Log.d("ControlVM", "❌ Cannot press button $index - another operation in progress")
-                return@launch
+    // Thêm hàm mới để xử lý Emergency Stop
+    private suspend fun executeEmergencyStop(activate: Boolean) {
+        try {
+            // Không lock emergency stop button
+            _uiState.update { currentState ->
+                currentState.copy(
+                    isWriting = true,
+                    busyButtons = setOf(10)
+                )
             }
 
-            try {
-                val state = _uiState.value
+            // Write to PLC
+            repoImpl.writeBoolean(10, activate)
 
+            // Delay nhỏ để PLC xử lý
+            delay(100)
+
+        } catch (e: Exception) {
+            Log.e("ControlVM", "Error in emergency stop", e)
+            _uiState.update { it.copy(errorMessage = "Emergency stop failed: ${e.message}") }
+        } finally {
+            _uiState.update { it.copy(isWriting = false) }
+        }
+    }
+    fun onStartPress(index: Int) {
+        viewModelScope.launch {
+            try {
+                // Kiểm tra điều kiện cơ bản
+                val state = _uiState.value
                 if (!connectionStarted || index in state.lockedButtons) {
-                    Log.d("ControlVM", "❌ Cannot press button $index")
+                    Log.d("ControlVM", "❌ Cannot press button $index - not ready or locked")
+                    return@launch
+                }
+
+                // Kiểm tra xem có operation nào đang chạy không
+                if (currentProcessingButton != null) {
+                    Log.d("ControlVM", "❌ Cannot press button $index - button $currentProcessingButton is processing")
                     return@launch
                 }
 
                 // Mark as processing
                 currentProcessingButton = index
 
-                // Update UI
+                // Update UI ngay lập tức
                 _uiState.update { currentState ->
                     val allButtons = (0..14).toSet() + (203..230).toSet()
                     currentState.copy(
@@ -282,18 +310,30 @@ class ControlViewModel @Inject constructor(
                     )
                 }
 
-                // Write true
-                repoImpl.writeBoolean(index, true)
+                // Write true với timeout
+                withTimeout(3000) { // 3 giây timeout
+                    repoImpl.writeBoolean(index, true)
+                }
+
                 Log.d("ControlVM", "✅ Button $index pressed")
 
-                // KHÔNG release lock ở đây - giữ cho đến khi release
-
             } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Error in onStartPress", e)
-                // Nếu có lỗi, cleanup
-                currentProcessingButton = null
-                _uiState.update { it.copy(isWriting = false) }
-                globalProcessingLock.unlock()
+                Log.e("ControlVM", "❌ Error in onStartPress for button $index", e)
+
+                // QUAN TRỌNG: Clear state khi có lỗi
+                if (currentProcessingButton == index) {
+                    currentProcessingButton = null
+                    _uiState.update {
+                        it.copy(
+                            isWriting = false,
+                            busyButtons = emptySet(),
+                            errorMessage = "Press failed: ${e.message}"
+                        )
+                    }
+
+                    // Force update UI
+                    updateUIWithPlcData(_uiState.value.plcData)
+                }
             }
         }
     }
@@ -303,29 +343,57 @@ class ControlViewModel @Inject constructor(
             try {
                 // Chỉ xử lý nếu đây là button đang được press
                 if (currentProcessingButton == index && connectionStarted) {
-                    // Write false
-                    repoImpl.writeBoolean(index, false)
+                    // Write false với timeout
+                    withTimeout(3000) { // 3 giây timeout
+                        repoImpl.writeBoolean(index, false)
+                    }
                     Log.d("ControlVM", "✅ Button $index released")
                 }
             } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Error in onEndPress", e)
+                Log.e("ControlVM", "❌ Error in onEndPress for button $index", e)
             } finally {
-                // Always cleanup nếu đây là button đang xử lý
+                // LUÔN LUÔN clear state khi release
                 if (currentProcessingButton == index) {
                     currentProcessingButton = null
-                    _uiState.update { it.copy(isWriting = false) }
-
-                    // Unlock để các button khác có thể dùng
-                    try {
-                        globalProcessingLock.unlock()
-                    } catch (e: Exception) {
-                        // Ignore if not locked
+                    _uiState.update {
+                        it.copy(
+                            isWriting = false,
+                            busyButtons = emptySet()
+                        )
                     }
 
-                    // Force UI update
+                    // Force update UI
                     updateUIWithPlcData(_uiState.value.plcData)
                 }
             }
+        }
+    }
+
+    fun resetProcessingState() {
+        viewModelScope.launch {
+            Log.d("ControlVM", "🔄 Resetting processing state")
+
+            currentProcessingButton = null
+
+            // Unlock global lock nếu đang bị lock
+            if (globalProcessingLock.isLocked) {
+                try {
+                    globalProcessingLock.unlock()
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+
+            _uiState.update {
+                it.copy(
+                    isWriting = false,
+                    busyButtons = emptySet(),
+                    lockedButtons = emptySet()
+                )
+            }
+
+            // Force UI update
+            updateUIWithPlcData(_uiState.value.plcData)
         }
     }
 
