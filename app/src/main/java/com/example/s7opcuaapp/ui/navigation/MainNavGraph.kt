@@ -6,7 +6,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -20,26 +19,15 @@ import com.example.s7opcuaapp.ui.screen.control.ControlScreen
 import com.example.s7opcuaapp.ui.screen.home.HomeScreen
 import com.example.s7opcuaapp.ui.screen.history.LoginHistoryScreen
 import com.example.s7opcuaapp.ui.screen.usermanager.UserManagerScreen
-import com.example.s7opcuaapp.viewmodel.AlarmViewModel
-import com.example.s7opcuaapp.viewmodel.ConfigViewModel
-import com.example.s7opcuaapp.viewmodel.ControlViewModel
-import com.example.s7opcuaapp.viewmodel.HomeViewModel
-import com.example.s7opcuaapp.viewmodel.LoginHistoryViewModel
-import com.example.s7opcuaapp.viewmodel.LogoutViewModel
-import com.example.s7opcuaapp.viewmodel.UserManagerViewModel
+import com.example.s7opcuaapp.viewmodel.*
 
-/**
- * MainNavGraph với TopNavigationBar
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainNavGraph(rootNavController: NavHostController) {
-    // Create a separate NavController for the top navigation
     val topNavController = androidx.navigation.compose.rememberNavController()
     val navBackStackEntry by topNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Create ViewModels at this level
     val controlViewModel: ControlViewModel = hiltViewModel()
     val controlUiState by controlViewModel.uiState.collectAsStateWithLifecycle()
     val logoutViewModel: LogoutViewModel = hiltViewModel()
@@ -65,14 +53,10 @@ fun MainNavGraph(rootNavController: NavHostController) {
             startDestination = "control",
             modifier = Modifier.padding(paddingValues)
         ) {
-            // Control Screen
             composable("control") {
                 DisposableEffect(Unit) {
                     controlViewModel.startConnection()
-                    onDispose {
-                        // Don't stop connection when navigating away
-                        // Only stop when leaving MainNavGraph
-                    }
+                    onDispose { /* keep connection until leaving MainNavGraph */ }
                 }
 
                 ControlScreen(
@@ -98,41 +82,38 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onSendAll = {
                         controlViewModel.onSendAll()
                     },
-                    onStartPress = { idx ->
-                        controlViewModel.onStartPress(idx)
+                    onPressButton = { index ->
+                        controlViewModel.onPressButton(index)
+                        true
                     },
-                    onEndPress = { idx ->
-                        controlViewModel.onEndPress(idx)
+                    onReleaseButton = { index ->
+                        controlViewModel.onReleaseButton(index)
+                        true
                     }
                 )
             }
 
-            // Home Screen
             composable("home") {
                 val homeViewModel: HomeViewModel = hiltViewModel()
                 HomeScreen(navController = topNavController)
             }
 
-            // Alarm Screen
             composable("alarm") {
                 val alarmViewModel: AlarmViewModel = hiltViewModel()
                 val uiState by alarmViewModel.uiState.collectAsStateWithLifecycle()
                 AlarmScreen(uiState = uiState)
             }
 
-            // User Manager Screen
             composable("user_manager") {
                 val userManagerViewModel: UserManagerViewModel = hiltViewModel()
                 UserManagerScreen(viewModel = userManagerViewModel)
             }
 
-            // Login History Screen
             composable("login_history") {
                 val loginHistoryViewModel: LoginHistoryViewModel = hiltViewModel()
                 LoginHistoryScreen(viewModel = loginHistoryViewModel)
             }
 
-            // Config Bottom Tab
             composable("config_btm") {
                 val configViewModel: ConfigViewModel = hiltViewModel()
                 val uiState by configViewModel.uiState.collectAsStateWithLifecycle()
@@ -157,9 +138,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onRemoveDevice = { device -> configViewModel.onRemoveDevice(device) },
                     onSelectDevice = { device ->
                         configViewModel.onSelectDevice(device) {
-                            // Restart connection with new device
                             controlViewModel.restartConnection()
-                            // Navigate back to control
                             topNavController.navigate("control") {
                                 popUpTo("control") { inclusive = true }
                             }
@@ -172,7 +151,6 @@ fun MainNavGraph(rootNavController: NavHostController) {
         }
     }
 
-    // Stop connection when leaving MainNavGraph
     DisposableEffect(Unit) {
         onDispose {
             controlViewModel.stopConnection()

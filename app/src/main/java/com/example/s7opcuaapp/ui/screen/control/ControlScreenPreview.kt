@@ -35,7 +35,7 @@ fun ControlScreenPreview() {
         onFunctionSelect = {},
         onTextChange = { _, _ -> },
         onSendAll = {},
-        onStartPress = {},
-        onEndPress = {}
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false }
     )
 }

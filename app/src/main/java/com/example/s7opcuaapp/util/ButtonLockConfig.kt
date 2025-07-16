@@ -39,23 +39,26 @@ class ButtonLockConfig @Inject constructor() {
         1 to setOf(6, 7, 8, 9, 203, 204),
         2 to setOf(6, 7, 8, 9, 203, 204),
         3 to setOf(6, 7, 8, 9, 203, 204),
+        14 to setOf(0, 1, 2, 3, 203, 204),
+
         // When any auto operation is active, lock manual movements
-        6 to setOf(0, 1, 2, 3, 203, 204),
-        7 to setOf(0, 1, 2, 3, 203, 204),
-        8 to setOf(0, 1, 2, 3, 203, 204),
-        9 to setOf(0, 1, 2, 3, 203, 204),
-        203 to setOf(0, 1, 2, 3, 6, 7, 8, 9),
-        204 to setOf(0, 1, 2, 3, 6, 7, 8, 9),
+        6 to setOf(0, 1, 2, 3, 14, 203, 204),
+        7 to setOf(0, 1, 2, 3, 14, 203, 204),
+        8 to setOf(0, 1, 2, 3, 14, 203, 204),
+        9 to setOf(0, 1, 2, 3, 14, 203, 204),
+
+        203 to setOf(0, 1, 2, 3, 6, 7, 8, 9, 14),
+        204 to setOf(0, 1, 2, 3, 6, 7, 8, 9, 14),
 
         // When emergency stop is active, lock all operations
-        10 to setOf(0, 1, 2, 3, 6, 7, 8, 9, 203, 204, 14)
+        10 to setOf(0, 1, 2, 3, 6, 7, 8, 9, 14, 202, 203, 204)
     )
 
     // Priority rules - these buttons can interrupt others
     private val priorityButtons = setOf(10) // Emergency stop has highest priority
 
     // Immediate lock on click - these buttons lock immediately without waiting for PLC
-    private val immediateLockButtons = setOf(0, 1, 2, 3, 6, 7, 8, 9, 10, 203, 204)
+    private val immediateLockButtons = setOf(0, 1, 2, 3, 6, 7, 8, 9, 10, 14, 203, 204)
 
     /**
      * Get all buttons that should be locked when given buttons are active or busy

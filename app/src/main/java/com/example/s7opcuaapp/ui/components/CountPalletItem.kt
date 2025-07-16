@@ -29,6 +29,7 @@ fun CountPalletItem(
     isPressed: Boolean,
     isManualMode: Boolean,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     isProcessing: Boolean = false,  // Thêm parameter
     modifier: Modifier = Modifier
 ) {
@@ -82,7 +83,7 @@ fun CountPalletItem(
                     }
                 )
                 .then(
-                    if (isManualMode && !isProcessing) {
+                    if (isManualMode && !isProcessing && enabled) {
                         Modifier.clickable { onClick() }
                     } else {
                         Modifier
@@ -100,6 +101,7 @@ fun CountPalletItem(
                 tint = when {
                     isProcessing -> Color.Yellow
                     !isManualMode -> Color.Gray
+                    !enabled -> Color.Gray
                     else -> Color.Unspecified
                 }
             )

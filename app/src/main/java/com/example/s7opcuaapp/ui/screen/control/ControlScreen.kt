@@ -1,4 +1,5 @@
 package com.example.s7opcuaapp.ui.screen.control
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -13,9 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.s7opcuaapp.ui.components.NumberInputDialog
 import com.example.s7opcuaapp.BuildConfig
 import com.example.s7opcuaapp.ui.components.PerformanceOverlay
+import androidx.compose.ui.platform.LocalInspectionMode
 
 @Composable
 fun ControlScreen(
@@ -27,8 +30,10 @@ fun ControlScreen(
     onFunctionSelect: (Int) -> Unit,
     onTextChange: (Int, String) -> Unit,
     onSendAll: () -> Unit,
-    onStartPress: (Int) -> Unit,
-    onEndPress: (Int) -> Unit
+//    onStartPress: (Int) -> Unit,
+//    onEndPress: (Int) -> Unit
+    onPressButton: (Int) -> Boolean,
+    onReleaseButton: (Int) -> Boolean
 ) {
     val data = uiState.plcData
     var isAuto by remember { mutableStateOf(true) }
@@ -59,13 +64,11 @@ fun ControlScreen(
                 data = data,
                 onToggleBoolean = onToggleBoolean,
                 onOpenDialog = onOpenDialog,
-                onStartPress = onStartPress,
-                onEndPress = onEndPress,
+                onPressButton = onPressButton,
+                onReleaseButton = onReleaseButton,
                 lockedButtons = lockedButtons,
                 busyButtons = busyButtons,
-                isProcessing = isProcessing,
-                modifier = Modifier.weight(0.2f),
-
+                modifier = Modifier.weight(0.2f)
             )
 
             Column(
@@ -118,9 +121,10 @@ fun ControlScreen(
                 data = data,
                 onToggleBoolean = onToggleBoolean,
                 onOpenDialog = onOpenDialog,
+                onPressButton = onPressButton,
+                onReleaseButton = onReleaseButton,
                 lockedButtons = lockedButtons,
                 busyButtons = busyButtons,
-                isProcessing = isProcessing,
                 modifier = Modifier.weight(0.2f)
             )
         }
@@ -149,7 +153,9 @@ fun ControlScreen(
                 }
             }
         }
-        if (BuildConfig.DEBUG) {
+        // Chỉ show PerformanceOverlay khi DEBUG và không phải Preview
+        val isInPreview = LocalInspectionMode.current
+        if (BuildConfig.DEBUG && !isInPreview) {
             PerformanceOverlay(
                 modifier = Modifier.padding(16.dp)
             )

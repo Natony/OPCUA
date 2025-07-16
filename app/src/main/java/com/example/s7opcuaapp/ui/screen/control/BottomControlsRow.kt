@@ -187,6 +187,7 @@ fun BottomControlsRow(
                             onToggleBoolean(14, data.bools.getOrNull(14)?.not() ?: false)
                         }
                     },
+                    enabled = 14 !in lockedButtons,
                     isProcessing = 14 in busyButtons
                 )
             }

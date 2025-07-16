@@ -20,11 +20,10 @@ fun LeftControlPanel(
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
     onOpenDialog: (Int) -> Unit,
-    onStartPress: (Int) -> Unit,
-    onEndPress: (Int) -> Unit,
+    onPressButton: (Int) -> Boolean,  // Updated signature
+    onReleaseButton: (Int) -> Boolean, // Updated signature
     lockedButtons: Set<Int>,
     busyButtons: Set<Int>,
-    isProcessing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -39,7 +38,7 @@ fun LeftControlPanel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isAuto) {
-            // Auto mode controls
+            // Auto mode controls - using regular BoolControlItem
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -53,7 +52,7 @@ fun LeftControlPanel(
                         R.drawable.ic_pallets_minus_on
                     ),
                     onClick = { onOpenDialog(4) },
-                    enabled = (4 + 200) !in lockedButtons && (4 + 200) !in busyButtons,
+                    enabled = (4 + 200) !in lockedButtons,
                     isProcessing = (4 + 200) in busyButtons
                 )
             }
@@ -69,7 +68,7 @@ fun LeftControlPanel(
                     iconOn = R.drawable.ic_pallet_minus_on,
                     iconOff = R.drawable.ic_pallet_minus_off,
                     onClick = { onToggleBoolean(6, data.bools.getOrNull(6)?.not() ?: false) },
-                    enabled = 6 !in lockedButtons && 6 !in busyButtons,
+                    enabled = 6 !in lockedButtons,
                     isProcessing = 6 in busyButtons
                 )
             }
@@ -85,12 +84,12 @@ fun LeftControlPanel(
                     iconOn = R.drawable.ic_stack_pallets_a_on,
                     iconOff = R.drawable.ic_stack_pallets_a_off,
                     onClick = { onToggleBoolean(8, data.bools.getOrNull(8)?.not() ?: false) },
-                    enabled = 8 !in lockedButtons && 8 !in busyButtons,
+                    enabled = 8 !in lockedButtons,
                     isProcessing = 8 in busyButtons
                 )
             }
         } else {
-            // Manual mode controls với PressReleaseBoolControlItem
+            // Manual mode controls - using PressReleaseBoolControlItem for movement
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -101,21 +100,10 @@ fun LeftControlPanel(
                     value = data.bools.getOrNull(0) ?: false,
                     iconOn = R.drawable.ic_shuttle_forward_on,
                     iconOff = R.drawable.ic_shuttle_forward_off,
-                    onPress = { onStartPress(0) },
-                    onRelease = { onEndPress(0) },
-                    enabled = 0 !in lockedButtons,
-                    isProcessing = isProcessing,
-                    busy = 0 in busyButtons,
+                    onPress = { onPressButton(0) },
+                    onRelease = { onReleaseButton(0) },
+                    enabled = 0 !in lockedButtons
                 )
-
-//                BoolControlItem(
-//                    value = data.bools.getOrNull(0) ?: false,
-//                    iconOn = R.drawable.ic_shuttle_forward_on,
-//                    iconOff = R.drawable.ic_shuttle_forward_off,
-//                    onClick = { onToggleBoolean(0, data.bools.getOrNull(0)?.not() ?: false) },
-//                    enabled = 0 !in lockedButtons && 0 !in busyButtons,
-//                    isProcessing = 0 in busyButtons
-//                )
             }
 
             Box(
@@ -124,23 +112,13 @@ fun LeftControlPanel(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-//                PressReleaseBoolControlItem(
-//                    value = data.bools.getOrNull(1) ?: false,
-//                    iconOn = R.drawable.ic_shuttle_reverse_on,
-//                    iconOff = R.drawable.ic_shuttle_reverse_off,
-//                    onPress = { onStartPress(1) },
-//                    onRelease = { onEndPress(1) },
-//                    enabled = 1 !in lockedButtons,
-//                    busy = 1 in busyButtons,
-//                )
-
-                BoolControlItem(
+                PressReleaseBoolControlItem(
                     value = data.bools.getOrNull(1) ?: false,
                     iconOn = R.drawable.ic_shuttle_reverse_on,
                     iconOff = R.drawable.ic_shuttle_reverse_off,
-                    onClick = { onToggleBoolean(1, data.bools.getOrNull(1)?.not() ?: false) },
-                    enabled = 1 !in lockedButtons && 1 !in busyButtons,
-                    isProcessing = 1 in busyButtons
+                    onPress = { onPressButton(1) },
+                    onRelease = { onReleaseButton(1) },
+                    enabled = 1 !in lockedButtons
                 )
             }
         }

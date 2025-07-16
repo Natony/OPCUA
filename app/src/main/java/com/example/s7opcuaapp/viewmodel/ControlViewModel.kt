@@ -38,12 +38,15 @@ class ControlViewModel @Inject constructor(
     private var dataObservationJob: Job? = null
 
     // UI update throttling
-    private val uiUpdateThrottle = 200L
+    private val uiUpdateThrottle = 300L
     private var lastUiUpdateTime = 0L
 
     // Global processing lock - chỉ cho phép 1 operation tại 1 thời điểm
     private val globalProcessingLock = Mutex()
     private var currentProcessingButton: Int? = null
+
+    private val pressedButtons = mutableSetOf<Int>()
+
 
     companion object {
         const val BOOL_OFFSET = 0
@@ -281,89 +284,161 @@ class ControlViewModel @Inject constructor(
             _uiState.update { it.copy(isWriting = false) }
         }
     }
-    fun onStartPress(index: Int) {
+//    fun onStartPress(index: Int) {
+//        viewModelScope.launch {
+//            try {
+//                // Kiểm tra điều kiện cơ bản
+//                val state = _uiState.value
+//                if (!connectionStarted || index in state.lockedButtons) {
+//                    Log.d("ControlVM", "❌ Cannot press button $index - not ready or locked")
+//                    return@launch
+//                }
+//
+//                // Kiểm tra xem có operation nào đang chạy không
+//                if (currentProcessingButton != null) {
+//                    Log.d("ControlVM", "❌ Cannot press button $index - button $currentProcessingButton is processing")
+//                    return@launch
+//                }
+//
+//                // Mark as processing
+//                currentProcessingButton = index
+//
+//                // Update UI ngay lập tức
+//                _uiState.update { currentState ->
+//                    val allButtons = (0..14).toSet() + (203..230).toSet()
+//                    currentState.copy(
+//                        isWriting = true,
+//                        busyButtons = setOf(index),
+//                        lockedButtons = allButtons - index
+//                    )
+//                }
+//
+//                // Write true với timeout
+//                withTimeout(3000) { // 3 giây timeout
+//                    repoImpl.writeBoolean(index, true)
+//                }
+//
+//                Log.d("ControlVM", "✅ Button $index pressed")
+//
+//            } catch (e: Exception) {
+//                Log.e("ControlVM", "❌ Error in onStartPress for button $index", e)
+//
+//                // QUAN TRỌNG: Clear state khi có lỗi
+//                if (currentProcessingButton == index) {
+//                    currentProcessingButton = null
+//                    _uiState.update {
+//                        it.copy(
+//                            isWriting = false,
+//                            busyButtons = emptySet(),
+//                            errorMessage = "Press failed: ${e.message}"
+//                        )
+//                    }
+//
+//                    // Force update UI
+//                    updateUIWithPlcData(_uiState.value.plcData)
+//                }
+//            }
+//        }
+//    }
+
+//    fun onEndPress(index: Int) {
+//        viewModelScope.launch {
+//            try {
+//                // Chỉ xử lý nếu đây là button đang được press
+//                if (currentProcessingButton == index && connectionStarted) {
+//                    // Write false với timeout
+//                    withTimeout(3000) { // 3 giây timeout
+//                        repoImpl.writeBoolean(index, false)
+//                    }
+//                    Log.d("ControlVM", "✅ Button $index released")
+//                }
+//            } catch (e: Exception) {
+//                Log.e("ControlVM", "❌ Error in onEndPress for button $index", e)
+//            } finally {
+//                // LUÔN LUÔN clear state khi release
+//                if (currentProcessingButton == index) {
+//                    currentProcessingButton = null
+//                    _uiState.update {
+//                        it.copy(
+//                            isWriting = false,
+//                            busyButtons = emptySet()
+//                        )
+//                    }
+//
+//                    // Force update UI
+//                    updateUIWithPlcData(_uiState.value.plcData)
+//                }
+//            }
+//        }
+//    }
+
+    fun onPressButton(index: Int) {
         viewModelScope.launch {
             try {
-                // Kiểm tra điều kiện cơ bản
-                val state = _uiState.value
-                if (!connectionStarted || index in state.lockedButtons) {
-                    Log.d("ControlVM", "❌ Cannot press button $index - not ready or locked")
+                // Check if already pressed
+                if (index in pressedButtons) {
+                    Log.w("ControlVM", "Button $index already pressed, ignoring")
                     return@launch
                 }
 
-                // Kiểm tra xem có operation nào đang chạy không
-                if (currentProcessingButton != null) {
-                    Log.d("ControlVM", "❌ Cannot press button $index - button $currentProcessingButton is processing")
+                // Check if connected
+                if (!connectionStarted) {
+                    Log.e("ControlVM", "Cannot press button $index - not connected")
                     return@launch
                 }
 
-                // Mark as processing
-                currentProcessingButton = index
+                // Add to pressed set
+                pressedButtons.add(index)
 
-                // Update UI ngay lập tức
-                _uiState.update { currentState ->
-                    val allButtons = (0..14).toSet() + (203..230).toSet()
-                    currentState.copy(
-                        isWriting = true,
-                        busyButtons = setOf(index),
-                        lockedButtons = allButtons - index
-                    )
+                // Update UI to show button is active
+                _uiState.update { state ->
+                    state.copy(busyButtons = state.busyButtons + index)
                 }
 
-                // Write true với timeout
-                withTimeout(3000) { // 3 giây timeout
-                    repoImpl.writeBoolean(index, true)
-                }
-
-                Log.d("ControlVM", "✅ Button $index pressed")
+                // Write true to PLC
+                Log.d("ControlVM", "➡️ Pressing button $index")
+                repoImpl.writeBoolean(index, true)
 
             } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Error in onStartPress for button $index", e)
-
-                // QUAN TRỌNG: Clear state khi có lỗi
-                if (currentProcessingButton == index) {
-                    currentProcessingButton = null
-                    _uiState.update {
-                        it.copy(
-                            isWriting = false,
-                            busyButtons = emptySet(),
-                            errorMessage = "Press failed: ${e.message}"
-                        )
-                    }
-
-                    // Force update UI
-                    updateUIWithPlcData(_uiState.value.plcData)
+                Log.e("ControlVM", "Error pressing button $index", e)
+                // Remove from pressed set on error
+                pressedButtons.remove(index)
+                _uiState.update { state ->
+                    state.copy(busyButtons = state.busyButtons - index)
                 }
             }
         }
     }
 
-    fun onEndPress(index: Int) {
+    /**
+     * Handle button release with local state management
+     * Returns true if successful
+     */
+    fun onReleaseButton(index: Int) {
         viewModelScope.launch {
             try {
-                // Chỉ xử lý nếu đây là button đang được press
-                if (currentProcessingButton == index && connectionStarted) {
-                    // Write false với timeout
-                    withTimeout(3000) { // 3 giây timeout
-                        repoImpl.writeBoolean(index, false)
-                    }
-                    Log.d("ControlVM", "✅ Button $index released")
-                }
-            } catch (e: Exception) {
-                Log.e("ControlVM", "❌ Error in onEndPress for button $index", e)
-            } finally {
-                // LUÔN LUÔN clear state khi release
-                if (currentProcessingButton == index) {
-                    currentProcessingButton = null
-                    _uiState.update {
-                        it.copy(
-                            isWriting = false,
-                            busyButtons = emptySet()
-                        )
-                    }
+                // Always try to release, even if not in pressed set
+                Log.d("ControlVM", "⬅️ Releasing button $index")
 
-                    // Force update UI
-                    updateUIWithPlcData(_uiState.value.plcData)
+                // Remove from pressed set
+                pressedButtons.remove(index)
+
+                // Update UI
+                _uiState.update { state ->
+                    state.copy(busyButtons = state.busyButtons - index)
+                }
+
+                // Write false to PLC (always try, even if connection lost)
+                if (connectionStarted) {
+                    repoImpl.writeBoolean(index, false)
+                }
+
+            } catch (e: Exception) {
+                Log.e("ControlVM", "Error releasing button $index", e)
+                // Still remove from sets even on error
+                pressedButtons.remove(index)
+                _uiState.update { state ->
+                    state.copy(busyButtons = state.busyButtons - index)
                 }
             }
         }
@@ -394,6 +469,34 @@ class ControlViewModel @Inject constructor(
 
             // Force UI update
             updateUIWithPlcData(_uiState.value.plcData)
+        }
+    }
+
+    /**
+     * Clean up any stuck press/release operations
+     */
+    fun releaseAllButtons() {
+        viewModelScope.launch {
+            Log.d("ControlVM", "🔄 Releasing all pressed buttons: $pressedButtons")
+
+            val buttonsCopy = pressedButtons.toSet()
+            pressedButtons.clear()
+
+            // Update UI immediately
+            _uiState.update { state ->
+                state.copy(busyButtons = state.busyButtons - buttonsCopy)
+            }
+
+            // Try to release each button
+            buttonsCopy.forEach { index ->
+                try {
+                    if (connectionStarted) {
+                        repoImpl.writeBoolean(index, false)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Error releasing button $index during cleanup", e)
+                }
+            }
         }
     }
 
@@ -454,6 +557,10 @@ class ControlViewModel @Inject constructor(
                 if (!connectionStarted) return@withLock
 
                 Log.d("ControlVM", "🛑 Stopping connection...")
+
+                // Release all pressed buttons first
+                releaseAllButtons()
+
                 connectionStarted = false
 
                 try {

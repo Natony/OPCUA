@@ -12,6 +12,7 @@ import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BoolControlItem
 import com.example.s7opcuaapp.ui.components.IntControlItem
+import com.example.s7opcuaapp.ui.components.PressReleaseBoolControlItem
 
 @Composable
 fun RightControlPanel(
@@ -19,10 +20,11 @@ fun RightControlPanel(
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
     onOpenDialog: (Int) -> Unit,
+    onPressButton: (Int) -> Boolean,  // Added
+    onReleaseButton: (Int) -> Boolean, // Added
     modifier: Modifier = Modifier,
     lockedButtons: Set<Int>,
-    busyButtons: Set<Int>,
-    isProcessing: Boolean = false
+    busyButtons: Set<Int>
 ) {
     Column(
         modifier = modifier
@@ -36,6 +38,7 @@ fun RightControlPanel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isAuto) {
+            // Auto mode - regular controls
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
@@ -47,7 +50,7 @@ fun RightControlPanel(
                         R.drawable.ic_pallets_plus_on
                     ),
                     onClick = { onOpenDialog(3) },
-                    enabled = (3 + 200) !in lockedButtons && (3 + 200) !in busyButtons,
+                    enabled = (3 + 200) !in lockedButtons,
                     isProcessing = (3 + 200) in busyButtons
                 )
             }
@@ -60,8 +63,8 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_pallet_plus_on,
                     iconOff = R.drawable.ic_pallet_plus_off,
                     onClick = { onToggleBoolean(7, data.bools.getOrNull(7)?.not() ?: false) },
-                    enabled = 7 !in lockedButtons && 7 !in busyButtons,
-                    isProcessing = 9 in busyButtons
+                    enabled = 7 !in lockedButtons,
+                    isProcessing = 7 in busyButtons
                 )
             }
             Box(
@@ -73,35 +76,36 @@ fun RightControlPanel(
                     iconOn = R.drawable.ic_stack_pallets_b_on,
                     iconOff = R.drawable.ic_stack_pallets_b_off,
                     onClick = { onToggleBoolean(9, data.bools.getOrNull(9)?.not() ?: false) },
-                    enabled = 9 !in lockedButtons && 9 !in busyButtons,
+                    enabled = 9 !in lockedButtons,
                     isProcessing = 9 in busyButtons
                 )
             }
         } else {
+            // Manual mode - use press/release for up/down movement
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                BoolControlItem(
+                PressReleaseBoolControlItem(
                     value = data.bools.getOrNull(2) ?: false,
                     iconOn = R.drawable.ic_shuttle_up_on,
                     iconOff = R.drawable.ic_shuttle_up_off,
-                    onClick = { onToggleBoolean(2, data.bools.getOrNull(2)?.not() ?: false) },
-                    enabled = 2 !in lockedButtons && 2 !in busyButtons,
-                    isProcessing = 2 in busyButtons
+                    onPress = { onPressButton(2) },
+                    onRelease = { onReleaseButton(2) },
+                    enabled = 2 !in lockedButtons
                 )
             }
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                BoolControlItem(
+                PressReleaseBoolControlItem(
                     value = data.bools.getOrNull(3) ?: false,
                     iconOn = R.drawable.ic_shuttle_down_on,
                     iconOff = R.drawable.ic_shuttle_down_off,
-                    onClick = { onToggleBoolean(3, data.bools.getOrNull(3)?.not() ?: false) },
-                    enabled = 3 !in lockedButtons && 3 !in busyButtons,
-                    isProcessing = 3 in busyButtons
+                    onPress = { onPressButton(3) },
+                    onRelease = { onReleaseButton(3) },
+                    enabled = 3 !in lockedButtons
                 )
             }
         }
