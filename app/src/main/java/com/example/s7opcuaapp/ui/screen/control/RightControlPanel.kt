@@ -19,7 +19,7 @@ fun RightControlPanel(
     isAuto: Boolean,
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
-    onOpenDialog: (Int) -> Unit,
+    onOpenDialog: (String, Int) -> Unit,
     onPressButton: (Int) -> Boolean,  // Added
     onReleaseButton: (Int) -> Boolean, // Added
     modifier: Modifier = Modifier,
@@ -49,7 +49,7 @@ fun RightControlPanel(
                         R.drawable.ic_pallets_plus_off,
                         R.drawable.ic_pallets_plus_on
                     ),
-                    onClick = { onOpenDialog(3) },
+                    onClick = { onOpenDialog("Nhập số lượng đưa pallet vào",3) },
                     enabled = (3 + 200) !in lockedButtons,
                     isProcessing = (3 + 200) in busyButtons
                 )

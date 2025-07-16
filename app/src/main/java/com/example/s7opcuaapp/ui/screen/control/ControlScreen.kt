@@ -24,7 +24,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 fun ControlScreen(
     uiState: ControlUiState,
     onToggleBoolean: (Int, Boolean) -> Unit,
-    onOpenDialog: (Int) -> Unit,
+    onOpenDialog: (String, Int) -> Unit,
     onConfirmNumber: (Int, Int) -> Unit,
     onDismissDialog: () -> Unit,
     onFunctionSelect: (Int) -> Unit,
@@ -45,7 +45,7 @@ fun ControlScreen(
     // Dialog nhập số
     uiState.openDialogForIndex?.let { idx ->
         NumberInputDialog(
-            title = "Nhập giá trị cho index $idx",
+            title =  uiState.dialogTitle ?: "Nhập giá trị",
             initialValue = data.ints.getOrNull(idx)?.toString() ?: "0",
             onConfirm = { value -> onConfirmNumber(idx, value) },
             onDismiss = onDismissDialog

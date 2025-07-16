@@ -387,6 +387,18 @@ class ControlViewModel @Inject constructor(
                     return@launch
                 }
 
+                // For manual movement buttons (0,1,2,3), release any other pressed manual button
+                val manualButtons = setOf(0, 1, 2, 3)
+                if (index in manualButtons) {
+                    val otherPressedManualButtons = pressedButtons.intersect(manualButtons - index)
+                    otherPressedManualButtons.forEach { otherButton ->
+                        Log.d("ControlVM", "🔄 Auto-releasing manual button $otherButton before pressing $index")
+                        onReleaseButton(otherButton)
+                    }
+                    // Small delay to ensure release is processed
+                    delay(50)
+                }
+
                 // Add to pressed set
                 pressedButtons.add(index)
 
@@ -538,13 +550,18 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    fun openNumberDialog(index: Int) {
+    fun openNumberDialog(title: String, index: Int) {
         // Check if we can open dialog
         if (currentProcessingButton != null) {
             Log.d("ControlVM", "Cannot open dialog - operation in progress")
             return
         }
-        _uiState.update { it.copy(openDialogForIndex = index) }
+        _uiState.update { state ->
+            state.copy(
+                openDialogForIndex = index,
+                dialogTitle = title
+            )
+        }
     }
 
     fun dismissDialog() {

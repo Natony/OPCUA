@@ -19,7 +19,7 @@ fun LeftControlPanel(
     isAuto: Boolean,
     data: PlcData,
     onToggleBoolean: (Int, Boolean) -> Unit,
-    onOpenDialog: (Int) -> Unit,
+    onOpenDialog: (String, Int) -> Unit,
     onPressButton: (Int) -> Boolean,  // Updated signature
     onReleaseButton: (Int) -> Boolean, // Updated signature
     lockedButtons: Set<Int>,
@@ -51,7 +51,7 @@ fun LeftControlPanel(
                         R.drawable.ic_pallets_minus_off,
                         R.drawable.ic_pallets_minus_on
                     ),
-                    onClick = { onOpenDialog(4) },
+                    onClick = { onOpenDialog("Nhập số lượng lấy pallet ra",4) },
                     enabled = (4 + 200) !in lockedButtons,
                     isProcessing = (4 + 200) in busyButtons
                 )

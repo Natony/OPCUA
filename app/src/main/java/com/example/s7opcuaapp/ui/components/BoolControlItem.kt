@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 
@@ -25,7 +26,7 @@ fun BoolControlItem(
     iconOff: Int,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    isProcessing: Boolean = false, // Thêm parameter
+    isProcessing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -37,11 +38,18 @@ fun BoolControlItem(
         Icon(
             painter = painterResource(id = if (value) iconOn else iconOff),
             contentDescription = if (value) "On" else "Off",
-            modifier = Modifier.size(108.dp),
+            modifier = Modifier
+                .size(108.dp)
+                .then(
+                    if (isProcessing) {
+                        Modifier.alpha(0.7f) // Làm mờ nhẹ thay vì đổi màu
+                    } else {
+                        Modifier
+                    }
+                ),
             tint = when {
-                isProcessing -> Color.Yellow // Đang xử lý
-                !enabled -> Color.Gray       // Bị khóa
-                else -> Color.Unspecified    // Bình thường
+                !enabled -> Color.Gray
+                else -> Color.Unspecified
             }
         )
 
@@ -49,12 +57,11 @@ fun BoolControlItem(
         if (isProcessing) {
             CircularProgressIndicator(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(28.dp) // Tăng size để dễ thấy hơn
                     .align(Alignment.Center),
-                strokeWidth = 2.dp,
+                strokeWidth = 3.dp,
                 color = MaterialTheme.colorScheme.primary
             )
         }
     }
 }
-

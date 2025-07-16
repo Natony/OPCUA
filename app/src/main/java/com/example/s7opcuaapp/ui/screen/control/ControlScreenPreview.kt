@@ -29,7 +29,7 @@ fun ControlScreenPreview() {
     ControlScreen(
         uiState = sampleState,
         onToggleBoolean = { _, _ -> },
-        onOpenDialog = {},
+        onOpenDialog = { _, _ -> },
         onConfirmNumber = { _, _ -> },
         onDismissDialog = {},
         onFunctionSelect = {},

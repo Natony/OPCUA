@@ -6,6 +6,7 @@ data class ControlUiState(
     val plcData: PlcData = PlcData.empty(),
     val isWriting: Boolean = false,
     val openDialogForIndex: Int? = null,
+    val dialogTitle: String = "",
     val errorMessage: String? = null,
     val selectedFunction: Int = 0,
     val intInputs: Map<Int, String> = emptyMap(),

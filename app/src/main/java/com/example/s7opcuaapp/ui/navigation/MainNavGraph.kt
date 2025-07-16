@@ -64,8 +64,8 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onToggleBoolean = { idx, newVal ->
                         controlViewModel.onToggleBoolean(idx, newVal)
                     },
-                    onOpenDialog = { index ->
-                        controlViewModel.openNumberDialog(index)
+                    onOpenDialog = { title, index ->
+                        controlViewModel.openNumberDialog(title, index)
                     },
                     onConfirmNumber = { index, value ->
                         controlViewModel.confirmNumber(index, value)
