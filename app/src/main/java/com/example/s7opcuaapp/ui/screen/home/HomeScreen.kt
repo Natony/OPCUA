@@ -1,212 +1,178 @@
 package com.example.s7opcuaapp.ui.screen.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.s7opcuaapp.R
-import com.example.s7opcuaapp.data.model.UserRole
-import com.example.s7opcuaapp.util.SessionManager
 import com.example.s7opcuaapp.viewmodel.HomeViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    navController: NavController? = null,
+    navController: NavController,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val scrollState = rememberScrollState()
-    val currentUser by viewModel.currentUser.collectAsState()
-    val isAdmin = currentUser?.role == UserRole.ADMIN
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val isAdmin = viewModel.isAdmin()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Trang chủ") }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
+            // Welcome message
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_home_image),
-                    contentDescription = "Home Image",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
+                    .padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
-                currentUser?.let { user ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            text = "Logged in as: ${user.username} (${user.role})",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Xin chào, ${currentUser?.username ?: "User"}!",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Text(
+                        text = "Vai trò: ${currentUser?.role?.name ?: "N/A"}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            // Menu grid
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Common items
+                item {
+                    MenuCard(
+                        title = "Điều khiển",
+                        icon = Icons.Default.ControlCamera,
+                        onClick = { navController.navigate("control") }
+                    )
+                }
+
+                item {
+                    MenuCard(
+                        title = "Cảnh báo",
+                        icon = Icons.Default.Warning,
+                        onClick = { navController.navigate("alarm") }
+                    )
+                }
+
+                item {
+                    MenuCard(
+                        title = "Cấu hình thiết bị",
+                        icon = Icons.Default.Settings,
+                        onClick = { navController.navigate("config_btm") }
+                    )
+                }
+
+                // Admin only items
+                if (isAdmin) {
+                    item {
+                        MenuCard(
+                            title = "Quản lý người dùng",
+                            icon = Icons.Default.People,
+                            onClick = { navController.navigate("user_manager") }
+                        )
+                    }
+
+                    item {
+                        MenuCard(
+                            title = "Lịch sử đăng nhập",
+                            icon = Icons.Default.History,
+                            onClick = { navController.navigate("login_history") }
+                        )
+                    }
+
+                    item {
+                        MenuCard(
+                            title = "Cấu hình khóa",
+                            icon = Icons.Default.Lock,
+                            onClick = { navController.navigate("status_lock_config") },
+                            isNew = true
                         )
                     }
                 }
             }
         }
-
-        // Admin Functions - only show for admin users
-        if (isAdmin) {
-            Text(
-                "Admin Functions",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                MenuCard(
-                    title = "User Manager",
-                    description = "Manage system users",
-                    icon = Icons.Default.Person,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        navController?.navigate("user_manager")
-                    }
-                )
-
-                MenuCard(
-                    title = "Login History",
-                    description = "View access logs",
-                    icon = Icons.Default.History,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        navController?.navigate("login_history")
-                    }
-                )
-            }
-        }
-
-        // System Info
-        Text(
-            "System Information",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        )
-
-        SystemInfoCard()
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MenuCard(
+private fun MenuCard(
     title: String,
-    description: String,
     icon: ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isNew: Boolean = false
 ) {
-    Card(
+    ElevatedCard(
         onClick = onClick,
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+            }
 
-@Composable
-fun SystemInfoCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("App Version")
-                Text("1.0.0", fontWeight = FontWeight.Medium)
-            }
-            HorizontalDivider()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("OPC UA Library")
-                Text("Eclipse Milo", fontWeight = FontWeight.Medium)
-            }
-            HorizontalDivider()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Database")
-                Text("Room 2.6.1", fontWeight = FontWeight.Medium)
+            // New badge
+            if (isNew) {
+                Badge(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Text("MỚI")
+                }
             }
         }
     }

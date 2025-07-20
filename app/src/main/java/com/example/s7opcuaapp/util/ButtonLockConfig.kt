@@ -6,12 +6,15 @@ import javax.inject.Singleton
 /**
  * Configuration for button locking behavior
  * Supports:
+ * - Status-based locking (primary - based on PLC status value)
  * - Group locking (when one button in group is active, lock others in same group)
  * - Cross locking (when button X is active, lock specific other buttons)
  * - Custom rules
  */
 @Singleton
-class ButtonLockConfig @Inject constructor() {
+class ButtonLockConfig @Inject constructor(
+    private val statusLockConfig: StatusLockConfig
+) {
 
     // Button types for easier management
     enum class ButtonType {

@@ -11,6 +11,7 @@ import com.example.s7opcuaapp.data.repository.S7Repository
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import com.example.s7opcuaapp.util.ButtonLockConfig
 import com.example.s7opcuaapp.util.PerformanceMonitor
+import com.example.s7opcuaapp.util.StatusLockConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -23,7 +24,8 @@ class ControlViewModel @Inject constructor(
     private val prefsManager: PrefsManager,
     repository: S7Repository,
     private val performanceMonitor: PerformanceMonitor,
-    private val buttonLockConfig: ButtonLockConfig
+    private val buttonLockConfig: ButtonLockConfig,
+    private val statusLockConfig: StatusLockConfig
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ControlUiState())

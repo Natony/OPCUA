@@ -22,6 +22,8 @@ class PrefsManager @Inject constructor(context: Context) {
         private const val KEY_CREDS             = "saved_credentials"
         private const val KEY_DEVICES_JSON      = "device_list"
         private const val KEY_CURRENT_DEVICE_ID = "current_device_id"
+        private const val KEY_STATUS_LOCK_CONFIG = "status_lock_config"
+        private const val KEY_STATUS_LOCK_OVERRIDE = "status_lock_override"
     }
 
     fun saveSession(sessionId: String, userId: String, username: String, role: String) {

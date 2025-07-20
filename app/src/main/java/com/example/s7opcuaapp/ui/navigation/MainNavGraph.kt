@@ -114,6 +114,14 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 LoginHistoryScreen(viewModel = loginHistoryViewModel)
             }
 
+            composable("status_lock_config") {
+                val statusLockConfigViewModel: StatusLockConfigViewModel = hiltViewModel()
+                com.example.s7opcuaapp.ui.screen.admin.StatusLockConfigScreen(
+                    viewModel = statusLockConfigViewModel,
+                    onBack = { topNavController.popBackStack() }
+                )
+            }
+
             composable("config_btm") {
                 val configViewModel: ConfigViewModel = hiltViewModel()
                 val uiState by configViewModel.uiState.collectAsStateWithLifecycle()
