@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
@@ -14,17 +13,18 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 
 /**
  * Composable hiển thị icon và giá trị số (Int) với khả năng click,
  * không có nền.
  *
- * @param label      Nhãn hiển thị phía trước giá trị
  * @param intValue   Giá trị số cần hiển thị
  * @param icons      Danh sách icon tương ứng với các giá trị trạng thái
  * @param onClick    Callback khi nhấn vào item
- * @param modifier   Modifier tuỳ chỉnh
+ * @param enabled    Cho phép nhấn
+ * @param isProcessing Hiển thị trạng thái đang xử lý
  */
 @Composable
 fun IntControlItem(
@@ -32,38 +32,36 @@ fun IntControlItem(
     icons: List<Int>,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    isProcessing: Boolean = false,  // Thêm parameter
+    isProcessing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val iconRes = icons.getOrElse(intValue) { icons.last() }
 
-    Row(
+    Column(
         modifier = modifier
-            .wrapContentHeight()
-            .padding(vertical = 4.dp, horizontal = 8.dp)
+            .wrapContentSize()
             .clickable(enabled = enabled && !isProcessing) { onClick() },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)  // giảm khoảng cách
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(108.dp)
+                    .size(64.dp)  // giảm kích thước để phù hợp
                     .clip(RoundedCornerShape(4.dp)),
                 tint = when {
-                    isProcessing -> Color.Yellow  // Đang xử lý
-                    !enabled -> Color.Gray       // Bị khóa
-                    else -> Color.Unspecified   // Bình thường
+                    isProcessing -> Color.Yellow
+                    !enabled -> Color.Gray
+                    else -> Color.Unspecified
                 }
             )
 
-            // Show loading indicator if processing
             if (isProcessing) {
                 CircularProgressIndicator(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(16.dp)
                         .align(Alignment.Center),
                     strokeWidth = 2.dp,
                     color = MaterialTheme.colorScheme.primary
@@ -73,7 +71,7 @@ fun IntControlItem(
 
         Text(
             text = intValue.toString(),
-            fontSize = 16.sp,
+            fontSize = 14.sp,
             color = when {
                 isProcessing -> MaterialTheme.colorScheme.primary
                 !enabled -> Color.Gray

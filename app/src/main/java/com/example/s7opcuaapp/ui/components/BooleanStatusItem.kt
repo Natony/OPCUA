@@ -30,14 +30,14 @@ fun BooleanStatusItem(
 
     Box(
         modifier = Modifier
-            .size(108.dp)
+            .size(156.dp)
             .clip(RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             painter = painterResource(id = if (value) iconOn else iconOff),
             contentDescription = null,
-            modifier = Modifier.size(108.dp),
+            modifier = Modifier.size(156.dp),
             tint = Color.Unspecified
         )
     }

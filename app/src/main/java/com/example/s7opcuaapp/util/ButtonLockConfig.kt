@@ -58,7 +58,7 @@ class ButtonLockConfig @Inject constructor() {
     private val priorityButtons = setOf(10) // Emergency stop has highest priority
 
     // Immediate lock on click - these buttons lock immediately without waiting for PLC
-    private val immediateLockButtons = setOf(0, 1, 2, 3, 6, 7, 8, 9, 10, 14, 203, 204)
+//    private val immediateLockButtons = setOf(0, 1, 2, 3, 6, 7, 8, 9, 10, 14, 203, 204)
 
     /**
      * Get all buttons that should be locked when given buttons are active or busy
@@ -105,9 +105,9 @@ class ButtonLockConfig @Inject constructor() {
     /**
      * Check if a button should lock immediately on click
      */
-    fun shouldLockImmediately(buttonIndex: Int): Boolean {
-        return buttonIndex in immediateLockButtons
-    }
+//    fun shouldLockImmediately(buttonIndex: Int): Boolean {
+//        return buttonIndex in immediateLockButtons
+//    }
 
     /**
      * Check if button A can interrupt button B
@@ -154,11 +154,11 @@ class ButtonLockConfig @Inject constructor() {
         }
     }
 
-    fun setImmediateLock(buttonIndex: Int, isImmediate: Boolean) {
-        if (isImmediate) {
-            (immediateLockButtons as MutableSet).add(buttonIndex)
-        } else {
-            (immediateLockButtons as MutableSet).remove(buttonIndex)
-        }
-    }
+//    fun setImmediateLock(buttonIndex: Int, isImmediate: Boolean) {
+//        if (isImmediate) {
+//            (immediateLockButtons as MutableSet).add(buttonIndex)
+//        } else {
+//            (immediateLockButtons as MutableSet).remove(buttonIndex)
+//        }
+//    }
 }

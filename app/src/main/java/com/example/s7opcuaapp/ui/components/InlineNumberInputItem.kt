@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
  */
 @Composable
 fun InlineNumberInputItem(
-    label: String,
+//    label: String,
     textValue: String,
     isWriting: Boolean,
     onTextChange: (String) -> Unit,
@@ -42,11 +42,11 @@ fun InlineNumberInputItem(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+//        Text(
+//            text = label,
+//            fontSize = 14.sp,
+//            modifier = Modifier.padding(bottom = 8.dp)
+//        )
 
         Box(
             modifier = Modifier.fillMaxWidth(),

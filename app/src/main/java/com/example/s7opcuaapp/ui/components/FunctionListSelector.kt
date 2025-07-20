@@ -32,7 +32,7 @@ fun FunctionListSelector(
         onExpandedChange = { expanded = !expanded },
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(vertical = 1.dp)
     ) {
         TextField(
             value = selectedLabel,
@@ -51,7 +51,7 @@ fun FunctionListSelector(
         ) {
             entries.forEach { (label, code) ->
                 DropdownMenuItem(
-                    text = { Text(text = label, fontSize = 10.sp) },
+                    text = { Text(text = label, fontSize = 8.sp) },
                     onClick = {
                         onSelect(code)
                         expanded = false

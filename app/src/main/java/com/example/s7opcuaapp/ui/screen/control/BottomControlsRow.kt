@@ -97,7 +97,7 @@ fun BottomControlsRow(
             // Shuttle status (read-only)
             Box(
                 modifier = modifier
-                    .size(108.dp)
+                    .size(156.dp)
                     .fillMaxSize()
                     .weight(0.7f),
                 contentAlignment = Alignment.Center
@@ -106,7 +106,8 @@ fun BottomControlsRow(
                     label = "Shuttle",
                     value = data.bools.getOrNull(12) ?: false,
                     iconOn = R.drawable.ic_green,
-                    iconOff = R.drawable.ic_red
+                    iconOff = R.drawable.ic_red,
+                    modifier = modifier.fillMaxSize()
                 )
             }
 

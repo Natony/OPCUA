@@ -32,14 +32,14 @@ fun CenterPanel(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(1.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Positions row
         Row(
             modifier = Modifier.weight(0.25f),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             MultiStateStatusItem(
@@ -138,9 +138,9 @@ fun CenterPanel(
         // Start/End/Actual/Function/Send row
         Row(
             modifier = Modifier
-                .weight(0.75f)
+                .weight(0.5f)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Start point cluster
@@ -151,11 +151,11 @@ fun CenterPanel(
             ) {
                 Text("Điểm bắt đầu", style = MaterialTheme.typography.bodySmall)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     InlineNumberInputItem(
-                        label = "X",
+//                        label = "X",
                         textValue = uiState.intInputs[5] ?: (data.ints.getOrNull(5)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -163,7 +163,7 @@ fun CenterPanel(
                         modifier = Modifier.weight(1f)
                     )
                     InlineNumberInputItem(
-                        label = "Y",
+//                        label = "Y",
                         textValue = uiState.intInputs[6] ?: (data.ints.getOrNull(6)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -171,7 +171,7 @@ fun CenterPanel(
                         modifier = Modifier.weight(1f)
                     )
                     InlineNumberInputItem(
-                        label = "Z",
+//                        label = "Z",
                         textValue = uiState.intInputs[7] ?: (data.ints.getOrNull(7)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -187,11 +187,11 @@ fun CenterPanel(
             ) {
                 Text("Điểm kết thúc", style = MaterialTheme.typography.bodySmall)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     InlineNumberInputItem(
-                        label = "X",
+//                        label = "X",
                         textValue = uiState.intInputs[8] ?: (data.ints.getOrNull(8)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -199,7 +199,7 @@ fun CenterPanel(
                         modifier = Modifier.weight(1f)
                     )
                     InlineNumberInputItem(
-                        label = "Y",
+//                        label = "Y",
                         textValue = uiState.intInputs[9] ?: (data.ints.getOrNull(9)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -207,7 +207,7 @@ fun CenterPanel(
                         modifier = Modifier.weight(1f)
                     )
                     InlineNumberInputItem(
-                        label = "Z",
+//                        label = "Z",
                         textValue = uiState.intInputs[10] ?: (data.ints.getOrNull(10)
                             ?.toString() ?: "0"),
                         isWriting = isWriting,
@@ -223,21 +223,21 @@ fun CenterPanel(
             ) {
                 Text("Thực tế", style = MaterialTheme.typography.bodySmall)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     NumericStatusItem(
-                        label = "X",
+//                        label = "X",
                         value = data.ints.getOrNull(11) ?: 0,
                         modifier = Modifier.weight(1f)
                     )
                     NumericStatusItem(
-                        label = "Y",
+//                        label = "Y",
                         value = data.ints.getOrNull(12) ?: 0,
                         modifier = Modifier.weight(1f)
                     )
                     NumericStatusItem(
-                        label = "Z",
+//                        label = "Z",
                         value = data.ints.getOrNull(13) ?: 0,
                         modifier = Modifier.weight(1f)
                     )

@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
  */
 @Composable
 fun NumericStatusItem(
-    label: String,
+//    label: String,
     value: Int,
     modifier: Modifier = Modifier
 ) {
@@ -29,11 +29,11 @@ fun NumericStatusItem(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+//        Text(
+//            text = label,
+//            fontSize = 14.sp,
+//            modifier = Modifier.padding(bottom = 8.dp)
+//        )
 
         Box(
             modifier = Modifier.fillMaxWidth(),

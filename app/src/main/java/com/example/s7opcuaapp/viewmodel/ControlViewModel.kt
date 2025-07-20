@@ -249,13 +249,16 @@ class ControlViewModel @Inject constructor(
 
     fun onToggleBoolean(index: Int, newValue: Boolean) {
         viewModelScope.launch {
-            // Xử lý đặc biệt cho Emergency Stop
-            if (index == 10) { // Emergency stop
-                executeEmergencyStop(newValue)
-            } else {
-                executeButtonAction(index, "toggle") {
-                    repoImpl.writeBoolean(index, newValue)
-                }
+            // Giữ lockedButtons cũ, chỉ show busyButtons
+            _uiState.update { it.copy(busyButtons = setOf(index)) }
+            try {
+                repoImpl.writeBoolean(index, newValue)
+            } catch (e: Exception) {
+                // lỗi
+            } finally {
+                // Khi PLC phản hồi, dataObservationJob thu về data mới,
+                // updateUIWithPlcData sẽ tính lại lockedButtons hợp lý
+                _uiState.update { it.copy(busyButtons = emptySet()) }
             }
         }
     }
