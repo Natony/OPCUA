@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BatteryStatusItem
 import com.example.s7opcuaapp.ui.components.TextStatusItem
+import com.example.s7opcuaapp.util.StatusLockConfig
 
 @Composable
 fun TopStatusBar(statusValue: Int, batteryLevel: Int) {
@@ -25,7 +26,7 @@ fun TopStatusBar(statusValue: Int, batteryLevel: Int) {
             TextStatusItem(
                 label = "",
                 intValue = statusValue,
-                statuses = List(15) { i -> "Trạng thái $i" },
+                statuses = StatusLockConfig.DEFAULT_STATUS_DESCRIPTIONS.values.toList(),
                 modifier = Modifier.wrapContentSize()
             )
         }

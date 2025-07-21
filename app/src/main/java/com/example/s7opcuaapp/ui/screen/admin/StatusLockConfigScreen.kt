@@ -17,9 +17,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.s7opcuaapp.util.StatusLockConfig.StatusLockRule
 import com.example.s7opcuaapp.viewmodel.StatusLockConfigViewModel
-import com.example.s7opcuaapp.viewmodel.StatusLockConfigUiState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,115 +29,68 @@ fun StatusLockConfigScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cấu hình khóa theo trạng thái") },
+                title = { Text("Button Lock Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    // Emergency override toggle
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(
-                            text = "Override",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = uiState.overrideActive,
-                            onCheckedChange = { viewModel.toggleOverride() },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Red,
-                                checkedTrackColor = Color.Red.copy(alpha = 0.5f)
-                            )
-                        )
-                    }
-
-                    // Reset button
                     TextButton(
                         onClick = { viewModel.showResetConfirmation() }
                     ) {
-                        Text("Reset", color = MaterialTheme.colorScheme.error)
+                        Text("Reset to Default", color = MaterialTheme.colorScheme.error)
                     }
                 }
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Warning banner if override is active
-            if (uiState.overrideActive) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.Red.copy(alpha = 0.1f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color.Red,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "OVERRIDE ĐANG BẬT",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Red
-                            )
-                            Text(
-                                text = "Tất cả khóa trạng thái đã bị vô hiệu hóa!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Red
-                            )
-                        }
-                    }
-                }
+            // Master Override Section
+            item {
+                MasterOverrideCard(
+                    isActive = uiState.overrideActive,
+                    onToggle = { viewModel.toggleOverride() }
+                )
             }
 
-            // Status rules list
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val sortedRules = uiState.statusRules.toList().sortedBy { it.first }
-                items(
-                    items = sortedRules,
-                    key = { it.first }
-                ) { (status, rule) ->
-                    StatusRuleCard(
-                        rule = rule,
-                        onToggleEnabled = { viewModel.toggleRuleEnabled(status) },
-                        onEditExemptButtons = { viewModel.showExemptButtonsDialog(status) }
-                    )
-                }
+            // Section header
+            item {
+                Text(
+                    text = "Lock Rules by Status",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                )
+            }
+
+            // Status rules
+            val sortedRules = uiState.statusRules.toList().sortedBy { it.first }
+            items(
+                items = sortedRules,
+                key = { it.first }
+            ) { (status, rule) ->
+                SimpleStatusRuleCard(
+                    rule = rule,
+                    enabled = !uiState.overrideActive,
+                    onToggle = { viewModel.toggleRuleEnabled(status) }
+                )
             }
         }
     }
 
-    // Dialogs
+    // Reset confirmation dialog
     if (uiState.showResetConfirmation) {
         AlertDialog(
             onDismissRequest = { viewModel.hideResetConfirmation() },
-            title = { Text("Xác nhận reset") },
-            text = { Text("Bạn có chắc muốn reset về cấu hình mặc định?") },
+            title = { Text("Reset to Default?") },
+            text = { Text("This will reset all lock settings to default values.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -153,173 +103,130 @@ fun StatusLockConfigScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideResetConfirmation() }) {
-                    Text("Hủy")
+                    Text("Cancel")
                 }
             }
-        )
-    }
-
-    uiState.editingStatus?.let { editingStatus ->
-        ExemptButtonsDialog(
-            statusValue = editingStatus,
-            statusDescription = uiState.statusRules[editingStatus]?.description ?: "",
-            exemptButtons = uiState.statusRules[editingStatus]?.exemptButtons ?: emptySet(),
-            onToggleButton = { button -> viewModel.toggleExemptButton(button) },
-            onDismiss = { viewModel.hideExemptButtonsDialog() }
         )
     }
 }
 
 @Composable
-private fun StatusRuleCard(
-    rule: StatusLockRule,
-    onToggleEnabled: () -> Unit,
-    onEditExemptButtons: () -> Unit
+private fun MasterOverrideCard(
+    isActive: Boolean,
+    onToggle: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (rule.isEnabled) {
-                MaterialTheme.colorScheme.surface
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            }
+            containerColor = if (isActive)
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            else MaterialTheme.colorScheme.primaryContainer
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isActive)
+                            MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
                     Text(
-                        text = "Trạng thái ${rule.statusValue}",
+                        text = "Master Override",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = rule.description,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
                 }
 
-                Switch(
-                    checked = rule.isEnabled,
-                    onCheckedChange = { onToggleEnabled() }
-                )
-            }
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Text(
-                    text = if (rule.lockAllButtons) {
-                        "Khóa tất cả nút (trừ ngoại lệ)"
-                    } else {
-                        "Không khóa"
-                    },
+                    text = if (isActive)
+                        "All locks DISABLED - All buttons work regardless of status"
+                    else
+                        "Locks ACTIVE - Buttons locked based on PLC status",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (rule.isEnabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    }
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                if (rule.lockAllButtons) {
-                    TextButton(
-                        onClick = onEditExemptButtons,
-                        enabled = rule.isEnabled
-                    ) {
-                        Text("Ngoại lệ (${rule.exemptButtons.size})")
-                    }
-                }
             }
+
+            Switch(
+                checked = isActive,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = if (isActive)
+                        MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = if (isActive)
+                        MaterialTheme.colorScheme.errorContainer
+                    else MaterialTheme.colorScheme.primaryContainer
+                )
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExemptButtonsDialog(
-    statusValue: Int,
-    statusDescription: String,
-    exemptButtons: Set<Int>,
-    onToggleButton: (Int) -> Unit,
-    onDismiss: () -> Unit
+private fun SimpleStatusRuleCard(
+    rule: StatusLockRule,
+    enabled: Boolean,
+    onToggle: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text("Nút ngoại lệ")
-                Text(
-                    text = "Trạng thái $statusValue: $statusDescription",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                rule.isEnabled -> MaterialTheme.colorScheme.surface
+                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
             }
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Chọn các nút KHÔNG bị khóa trong trạng thái này:",
+                    text = "Status ${rule.statusValue}: ${rule.description}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = when {
+                        !enabled -> "Override active - all locks disabled"
+                        !rule.isEnabled -> "Disabled - no locks for this status"
+                        rule.lockAllButtons -> "Locks all buttons when in this status"
+                        else -> "No locks for this status"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
-
-                // Common buttons
-                Text(
-                    text = "Nút điều khiển:",
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-
-                val commonButtons = listOf(
-                    0 to "Tiến",
-                    1 to "Lùi",
-                    2 to "Lên",
-                    3 to "Xuống",
-                    4 to "Power",
-                    5 to "Buzzer",
-                    6 to "Pallet -",
-                    7 to "Pallet +",
-                    8 to "Stack A",
-                    9 to "Stack B",
-                    10 to "Emergency Stop",
-                    11 to "FIFO/LIFO",
-                    13 to "Direction",
-                    14 to "Count"
-                )
-
-                commonButtons.forEach { (index, name) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = index in exemptButtons,
-                            onCheckedChange = { onToggleButton(index) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("$index - $name")
-                    }
-                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Đóng")
-            }
+
+            Switch(
+                checked = rule.isEnabled,
+                onCheckedChange = { onToggle() },
+                enabled = enabled
+            )
         }
-    )
+    }
 }

@@ -14,6 +14,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BatteryStatusItem
 import com.example.s7opcuaapp.ui.components.TextStatusItem
+import com.example.s7opcuaapp.util.StatusLockConfig
 
 /**
  * TopNavigationBar kết hợp TopStatusBar với Navigation
@@ -53,10 +54,10 @@ fun TopNavigationBar(
                 modifier = Modifier.weight(0.35f),
                 contentAlignment = Alignment.CenterEnd
             ) {
-
+                // Empty space
             }
 
-            // TextStatusItem - chiếm khoảng 35% width
+            // TextStatusItem - chiếm khoảng 30% width
             Box(
                 modifier = Modifier.weight(0.3f),
                 contentAlignment = Alignment.Center
@@ -64,28 +65,12 @@ fun TopNavigationBar(
                 TextStatusItem(
                     label = "",
                     intValue = statusValue,
-                    statuses = listOf(
-                        "Khởi tạo",
-                        "Sẵn sàng",
-                        "Đang chạy",
-                        "Tạm dừng",
-                        "Lỗi",
-                        "Bảo trì",
-                        "Hoàn thành",
-                        "Đang kết nối",
-                        "Mất kết nối",
-                        "Cảnh báo",
-                        "Khẩn cấp",
-                        "Đang hiệu chỉnh",
-                        "Đang kiểm tra",
-                        "Chờ xác nhận",
-                        "Đang cập nhật"
-                    ),
+                    statuses = StatusLockConfig.DEFAULT_STATUS_DESCRIPTIONS.toSortedMap().values.toList(),
                     modifier = Modifier.wrapContentSize()
                 )
             }
 
-            // Navigation Icons - chiếm khoảng 30% width
+            // Navigation Icons - chiếm khoảng 20% width
             Row(
                 modifier = Modifier.weight(0.2f),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -117,7 +102,7 @@ fun TopNavigationBar(
                 }
             }
 
-            // BatteryStatusItem - chiếm khoảng 15% width
+            // BatteryStatusItem - chiếm khoảng 10% width
             Box(
                 modifier = Modifier.weight(0.1f),
                 contentAlignment = Alignment.Center
@@ -134,7 +119,7 @@ fun TopNavigationBar(
                 )
             }
 
-            // Logout button - chiếm khoảng 10% width
+            // Logout button - chiếm khoảng 5% width
             Box(
                 modifier = Modifier.weight(0.05f),
                 contentAlignment = Alignment.CenterEnd

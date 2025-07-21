@@ -97,4 +97,24 @@ class PrefsManager @Inject constructor(context: Context) {
             .remove(KEY_CURRENT_DEVICE_ID)
             .apply()
     }
+
+    fun setStatusLockOverride(enabled: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_STATUS_LOCK_OVERRIDE, enabled)
+            .apply()
+    }
+
+    fun getStatusLockOverride(): Boolean {
+        return prefs.getBoolean(KEY_STATUS_LOCK_OVERRIDE, false)
+    }
+
+    fun saveStatusLockConfig(config: String) {
+        prefs.edit()
+            .putString(KEY_STATUS_LOCK_CONFIG, config)
+            .apply()
+    }
+
+    fun getStatusLockConfig(): String? {
+        return prefs.getString(KEY_STATUS_LOCK_CONFIG, null)
+    }
 }

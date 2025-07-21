@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
-
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import android.util.Log
 /**
  * Configuration for status-based button locking
  * Manages which buttons should be locked based on PLC status value
@@ -15,6 +17,8 @@ import javax.inject.Singleton
 class StatusLockConfig @Inject constructor(
     private val prefsManager: PrefsManager
 ) {
+
+    private val gson = Gson()
 
     companion object {
         private const val PREFS_KEY_STATUS_LOCK_CONFIG = "status_lock_config"
@@ -49,51 +53,49 @@ class StatusLockConfig @Inject constructor(
     )
 
     // Default configuration
-    private val defaultRules = mapOf(
-        0 to StatusLockRule(
-            statusValue = 0,
-            description = "Chưa sẵn sàng",
-            lockAllButtons = true,
-            isEnabled = true,
-            exemptButtons = setOf(10) // Emergency stop always available
-        ),
-        1 to StatusLockRule(
-            statusValue = 1,
-            description = "Đã sẵn sàng",
-            lockAllButtons = false, // Allow all operations
-            isEnabled = true
-        ),
-        // Status 2+ are "executing" states
-        2 to StatusLockRule(
-            statusValue = 2,
-            description = "Đang thực hiện 1",
-            lockAllButtons = true,
-            isEnabled = true,
-            exemptButtons = setOf(10) // Emergency stop
-        ),
-        3 to StatusLockRule(
-            statusValue = 3,
-            description = "Đang thực hiện 2",
-            lockAllButtons = true,
-            isEnabled = true,
-            exemptButtons = setOf(10)
-        ),
-        4 to StatusLockRule(
-            statusValue = 4,
-            description = "Đang thực hiện 3",
-            lockAllButtons = true,
-            isEnabled = true,
-            exemptButtons = setOf(10)
-        ),
-        // Add more status rules as needed
-        11 to StatusLockRule(
-            statusValue = 11,
-            description = "Khẩn cấp",
-            lockAllButtons = true,
-            isEnabled = true,
-            exemptButtons = emptySet() // Lock everything including emergency stop
-        )
-    )
+    private val defaultRules = DEFAULT_STATUS_DESCRIPTIONS.mapValues { (status, description) ->
+        when (status) {
+            0 -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = true,
+                isEnabled = true,
+                exemptButtons = setOf(10) // Emergency stop
+            )
+            1 -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = false, // Ready - no locks
+                isEnabled = true
+            )
+            in 2..6 -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = true, // Executing - lock all
+                isEnabled = true,
+                exemptButtons = setOf(10) // Emergency stop
+            )
+            7 -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = false, // Complete - no locks
+                isEnabled = true
+            )
+            11 -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = true, // Emergency - lock ALL
+                isEnabled = true,
+                exemptButtons = emptySet() // No exceptions
+            )
+            else -> StatusLockRule(
+                statusValue = status,
+                description = description,
+                lockAllButtons = false,
+                isEnabled = false // Disabled by default for other statuses
+            )
+        }
+    }
 
     // Current rules (can be modified by admin)
     private val _currentRules = MutableStateFlow<Map<Int, StatusLockRule>>(defaultRules)
@@ -104,8 +106,11 @@ class StatusLockConfig @Inject constructor(
     val overrideActive: StateFlow<Boolean> = _overrideActive.asStateFlow()
 
     init {
+        // Load override state từ prefs
+        _overrideActive.value = prefsManager.getStatusLockOverride()
         loadConfiguration()
     }
+
 
     /**
      * Get buttons that should be locked for given status
@@ -183,10 +188,11 @@ class StatusLockConfig @Inject constructor(
      */
     fun setOverrideActive(active: Boolean) {
         _overrideActive.value = active
-        // Log this action for security
+        prefsManager.setStatusLockOverride(active) // Lưu vào prefs
         android.util.Log.w("StatusLockConfig",
             "Emergency override ${if (active) "ACTIVATED" else "DEACTIVATED"}")
     }
+
 
     /**
      * Reset to default configuration
@@ -210,7 +216,6 @@ class StatusLockConfig @Inject constructor(
      * Save configuration to persistent storage
      */
     private fun saveConfiguration() {
-        // Convert to JSON and save
         val rulesJson = _currentRules.value.map { (status, rule) ->
             mapOf(
                 "status" to status,
@@ -221,21 +226,48 @@ class StatusLockConfig @Inject constructor(
             )
         }
 
-        // In real implementation, save to PrefsManager
-        // prefsManager.saveStatusLockConfig(rulesJson)
+        val configString = gson.toJson(rulesJson)
+        prefsManager.saveStatusLockConfig(configString)
     }
 
     /**
      * Load configuration from persistent storage
      */
     private fun loadConfiguration() {
-        // In real implementation, load from PrefsManager
-        // val saved = prefsManager.getStatusLockConfig()
-        // if (saved != null) {
-        //     _currentRules.value = parseConfiguration(saved)
-        // }
-    }
+        val saved = prefsManager.getStatusLockConfig()
+        if (saved != null) {
+            try {
+                val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+                val rulesJson: List<Map<String, Any>> = gson.fromJson(saved, type)
 
+                val rules = rulesJson.associate { map ->
+                    val status = (map["status"] as Double).toInt()
+                    val rule = StatusLockRule(
+                        statusValue = status,
+                        description = map["description"] as String,
+                        lockAllButtons = map["lockAll"] as Boolean,
+                        isEnabled = map["enabled"] as Boolean,
+                        exemptButtons = (map["exempt"] as? List<*>)?.let { list ->
+                            list.mapNotNull { item ->
+                                when (item) {
+                                    is Double -> item.toInt()
+                                    is Int -> item
+                                    is Number -> item.toInt()
+                                    else -> null
+                                }
+                            }.toSet()
+                        } ?: emptySet()
+                    )
+                    status to rule
+                }
+
+                _currentRules.value = rules
+            } catch (e: Exception) {
+                Log.e("StatusLockConfig", "Failed to load configuration", e)
+                // Keep default rules on error
+            }
+        }
+    }
     /**
      * Export current configuration as string (for backup)
      */
