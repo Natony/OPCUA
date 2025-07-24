@@ -109,6 +109,12 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // For password strength checking (optional)
+    implementation("com.nulab-inc:zxcvbn:1.8.2")
 }
 
 // KSP configuration

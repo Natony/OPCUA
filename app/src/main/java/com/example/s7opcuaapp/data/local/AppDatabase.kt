@@ -37,7 +37,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "s7opcua_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    // .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS) // Comment out
+                    .fallbackToDestructiveMigration() // Giữ dòng này
                     .build()
                 INSTANCE = instance
                 instance

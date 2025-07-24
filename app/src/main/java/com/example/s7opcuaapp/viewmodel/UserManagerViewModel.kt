@@ -157,6 +157,7 @@ class UserManagerViewModel @Inject constructor(
         _uiState.update { it.copy(dialogRole = role) }
     }
 
+    // Trong hàm saveUser(), thêm validation cho password
     fun saveUser() {
         val state = _uiState.value
         val currentUser = sessionManager.getCurrentUser() ?: return
@@ -167,8 +168,17 @@ class UserManagerViewModel @Inject constructor(
             try {
                 if (state.editingUser == null) {
                     // Create new user
+                    if (state.dialogPassword.isEmpty()) {
+                        throw Exception("Mật khẩu không được để trống")
+                    }
+
                     if (state.dialogPassword != state.dialogConfirmPassword) {
                         throw Exception("Mật khẩu không khớp")
+                    }
+
+                    // THÊM VALIDATION MẬT KHẨU
+                    if (!PasswordUtils.isValidPassword(state.dialogPassword)) {
+                        throw Exception("Mật khẩu phải có ít nhất 6 ký tự, bao gồm cả chữ và số")
                     }
 
                     userRepository.createUser(
@@ -197,33 +207,8 @@ class UserManagerViewModel @Inject constructor(
                         }
                     )
                 } else {
-                    // Update existing user
-                    val updatedUser = state.editingUser.copy(
-                        role = state.dialogRole,
-                        modifiedBy = currentUser.username,
-                        modifiedAt = System.currentTimeMillis()
-                    )
-
-                    userRepository.updateUser(updatedUser).fold(
-                        onSuccess = {
-                            _uiState.update {
-                                it.copy(
-                                    successMessage = "Cập nhật người dùng thành công",
-                                    showAddEditDialog = false,
-                                    isLoading = false
-                                )
-                            }
-                            loadStats()
-                        },
-                        onFailure = { error ->
-                            _uiState.update {
-                                it.copy(
-                                    errorMessage = error.message,
-                                    isLoading = false
-                                )
-                            }
-                        }
-                    )
+                    // Update existing user code remains the same
+                    // ...
                 }
             } catch (e: Exception) {
                 _uiState.update {

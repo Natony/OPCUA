@@ -1,3 +1,5 @@
+// app/src/main/java/com/example/s7opcuaapp/ui/components/UserDialogs.kt
+
 package com.example.s7opcuaapp.ui.components
 
 import androidx.compose.foundation.clickable
@@ -11,8 +13,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.data.model.UserRole
 import com.example.s7opcuaapp.util.PasswordUtils
+import androidx.compose.ui.graphics.Color // Thêm import này
 
-@OptIn(ExperimentalMaterial3Api::class) // FIX: Thêm annotation này
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditUserDialog(
     isEdit: Boolean,
@@ -50,26 +53,65 @@ fun AddEditUserDialog(
                 )
 
                 if (!isEdit) {
+                    // Password field với helper text
                     OutlinedTextField(
                         value = password,
                         onValueChange = onPasswordChange,
                         label = { Text("Mật khẩu") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Column {
+                                Text(
+                                    "Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ và số",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                passwordStrength?.let { strength ->
+                                    Text(
+                                        text = when (strength) {
+                                            PasswordUtils.PasswordStrength.WEAK -> "Mật khẩu yếu"
+                                            PasswordUtils.PasswordStrength.MEDIUM -> "Mật khẩu trung bình"
+                                            PasswordUtils.PasswordStrength.STRONG -> "Mật khẩu mạnh"
+                                            else -> "Mật khẩu rất mạnh" // Dùng else để cover mọi trường hợp
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = when (strength) {
+                                            PasswordUtils.PasswordStrength.WEAK -> MaterialTheme.colorScheme.error
+                                            PasswordUtils.PasswordStrength.MEDIUM -> Color(0xFFFF9800)
+                                            PasswordUtils.PasswordStrength.STRONG -> Color(0xFF4CAF50)
+                                            else -> Color(0xFF2196F3) // Màu xanh dương cho rất mạnh
+                                        }
+                                    )
+                                }
+                            }
+                        },
+                        isError = password.isNotEmpty() && !PasswordUtils.isValidPassword(password)
                     )
 
+                    // Confirm password field
                     OutlinedTextField(
                         value = confirmPassword,
                         onValueChange = onConfirmPasswordChange,
                         label = { Text("Xác nhận mật khẩu") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = confirmPassword.isNotEmpty() && password != confirmPassword,
+                        supportingText = {
+                            if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+                                Text(
+                                    "Mật khẩu không khớp",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                     )
                 }
 
-                // FIX: Đơn giản hóa role selector để tránh experimental API
+                // Role selector
                 var expanded by remember { mutableStateOf(false) }
 
                 ExposedDropdownMenuBox(
@@ -174,7 +216,34 @@ fun ChangePasswordDialog(
                     label = { Text("Mật khẩu mới") },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = {
+                        Column {
+                            Text(
+                                "Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ và số",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            passwordStrength?.let { strength ->
+                                Text(
+                                    text = when (strength) {
+                                        PasswordUtils.PasswordStrength.WEAK -> "Mật khẩu yếu"
+                                        PasswordUtils.PasswordStrength.MEDIUM -> "Mật khẩu trung bình"
+                                        PasswordUtils.PasswordStrength.STRONG -> "Mật khẩu mạnh"
+                                        else -> "Mật khẩu rất mạnh" // Dùng else để cover mọi trường hợp
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = when (strength) {
+                                        PasswordUtils.PasswordStrength.WEAK -> MaterialTheme.colorScheme.error
+                                        PasswordUtils.PasswordStrength.MEDIUM -> Color(0xFFFF9800)
+                                        PasswordUtils.PasswordStrength.STRONG -> Color(0xFF4CAF50)
+                                        else -> Color(0xFF2196F3) // Màu xanh dương cho rất mạnh
+                                    }
+                                )
+                            }
+                        }
+                    },
+                    isError = newPassword.isNotEmpty() && !PasswordUtils.isValidPassword(newPassword)
                 )
 
                 OutlinedTextField(
@@ -183,7 +252,17 @@ fun ChangePasswordDialog(
                     label = { Text("Xác nhận mật khẩu") },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = confirmPassword.isNotEmpty() && newPassword != confirmPassword,
+                    supportingText = {
+                        if (confirmPassword.isNotEmpty() && newPassword != confirmPassword) {
+                            Text(
+                                "Mật khẩu không khớp",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 )
 
                 errorMessage?.let { error ->
