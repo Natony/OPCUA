@@ -22,6 +22,7 @@ class StatusLockConfig @Inject constructor(
 
     companion object {
         private const val PREFS_KEY_STATUS_LOCK_CONFIG = "status_lock_config"
+        const val SEND_ALL_BUTTON_INDEX = 999  // Special index cho nút Send All
 
         // Default status descriptions
         val DEFAULT_STATUS_DESCRIPTIONS = mapOf(
@@ -135,7 +136,7 @@ class StatusLockConfig @Inject constructor(
             // All possible button indices
             val allButtons = (0..14).toSet() + // Bool buttons
                     (203..204).toSet() + // Int buttons 3,4 with offset
-                    setOf(999) // Send all button
+                    setOf(SEND_ALL_BUTTON_INDEX)
 
             // Remove exempt buttons
             allButtons - rule.exemptButtons

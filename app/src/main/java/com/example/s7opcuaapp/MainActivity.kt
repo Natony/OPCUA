@@ -1,6 +1,7 @@
 package com.example.s7opcuaapp
 
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,11 +14,13 @@ import com.example.s7opcuaapp.data.repository.UserRepository
 import com.example.s7opcuaapp.ui.navigation.RootNavHost
 import com.example.s7opcuaapp.ui.theme.S7Theme
 import com.example.s7opcuaapp.util.PasswordUtils
+import com.example.s7opcuaapp.util.PerformanceMonitor
 import com.example.s7opcuaapp.util.SessionManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
+import com.example.s7opcuaapp.data.buffer.PlcDataBuffer
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -28,6 +31,10 @@ class MainActivity : ComponentActivity() {
     lateinit var sessionManager: SessionManager
     @Inject
     lateinit var userRepository: UserRepository
+    @Inject
+    lateinit var performanceMonitor: PerformanceMonitor
+    @Inject
+    lateinit var plcDataBuffer: PlcDataBuffer
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -156,5 +163,19 @@ class MainActivity : ComponentActivity() {
             println("💥 Error in initializeDefaultAdmin: ${e.message}")
             e.printStackTrace()
         }
+    }
+
+    override fun onDestroy() {
+        // Cleanup resources
+        lifecycleScope.launch {
+            try {
+                // Stop all connections
+                plcDataBuffer.dispose()
+                performanceMonitor.cleanup()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error during cleanup", e)
+            }
+        }
+        super.onDestroy()
     }
 }

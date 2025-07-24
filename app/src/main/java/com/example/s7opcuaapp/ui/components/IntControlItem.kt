@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -42,20 +43,23 @@ fun IntControlItem(
             .wrapContentSize()
             .clickable(enabled = enabled && !isProcessing) { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)  // giảm khoảng cách
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(64.dp)  // giảm kích thước để phù hợp
-                    .clip(RoundedCornerShape(4.dp)),
-                tint = when {
-                    isProcessing -> Color.Yellow
-                    !enabled -> Color.Gray
-                    else -> Color.Unspecified
-                }
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .alpha(
+                        when {
+                            !enabled -> 0.3f       // Mờ 30% khi disabled
+                            isProcessing -> 0.7f   // Mờ 70% khi processing
+                            else -> 1f             // Full opacity khi normal
+                        }
+                    ),
+                tint = Color.Unspecified  // Giữ nguyên màu gốc
             )
 
             if (isProcessing) {
@@ -72,11 +76,13 @@ fun IntControlItem(
         Text(
             text = intValue.toString(),
             fontSize = 14.sp,
-            color = when {
-                isProcessing -> MaterialTheme.colorScheme.primary
-                !enabled -> Color.Gray
-                else -> MaterialTheme.colorScheme.onSurface
-            }
+            color = MaterialTheme.colorScheme.onSurface.copy(
+                alpha = when {
+                    !enabled -> 0.3f
+                    isProcessing -> 0.7f
+                    else -> 1f
+                }
+            )
         )
     }
 }

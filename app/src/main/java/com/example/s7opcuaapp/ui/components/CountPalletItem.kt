@@ -14,6 +14,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.alpha
+import com.example.s7opcuaapp.R
 
 /**
  * Count Pallet component hiển thị số lượng và nút đếm
@@ -30,15 +32,15 @@ fun CountPalletItem(
     isManualMode: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    isProcessing: Boolean = false,  // Thêm parameter
+    isProcessing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .wrapContentSize()
             .padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Số lượng - luôn hiển thị
         Card(
@@ -61,25 +63,34 @@ fun CountPalletItem(
                     text = count.toString(),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = when {
-                        isProcessing -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.primary
-                    }
+                    color = MaterialTheme.colorScheme.primary.copy(
+                        alpha = when {
+                            !isManualMode -> 0.5f
+                            isProcessing -> 0.7f
+                            else -> 1f
+                        }
+                    )
                 )
             }
         }
 
-        // Nút đếm - chỉ enable khi manual mode và không đang xử lý
+        // Nút đếm
         Box(
             modifier = Modifier
                 .size(78.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(
                     when {
-                        isProcessing -> Color.Yellow.copy(alpha = 0.3f)
-                        !isManualMode -> Color.Gray.copy(alpha = 0.3f)
-                        isPressed -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        isProcessing -> Color.Yellow.copy(alpha = 0.1f)
+                        isPressed -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                         else -> Color.Transparent
+                    }
+                )
+                .alpha(
+                    when {
+                        !isManualMode -> 0.3f  // Mờ khi auto mode
+                        !enabled -> 0.3f       // Mờ khi disabled
+                        else -> 1f
                     }
                 )
                 .then(
@@ -93,20 +104,14 @@ fun CountPalletItem(
         ) {
             Icon(
                 painter = painterResource(
-                    id = if (isPressed) com.example.s7opcuaapp.R.drawable.ic_count_pallet_on
-                    else com.example.s7opcuaapp.R.drawable.ic_count_pallet_off
+                    id = if (isPressed) R.drawable.ic_count_pallet_on
+                    else R.drawable.ic_count_pallet_off
                 ),
                 contentDescription = "Count Pallet",
                 modifier = Modifier.size(56.dp),
-                tint = when {
-                    isProcessing -> Color.Yellow
-                    !isManualMode -> Color.Gray
-                    !enabled -> Color.Gray
-                    else -> Color.Unspecified
-                }
+                tint = Color.Unspecified  // Giữ màu gốc của icon
             )
 
-            // Show loading indicator if processing
             if (isProcessing) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),

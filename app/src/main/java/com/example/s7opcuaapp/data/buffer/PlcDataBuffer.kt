@@ -44,7 +44,10 @@ class PlcDataBuffer @Inject constructor(
     val dataFlow: SharedFlow<PlcData> = _dataFlow.asSharedFlow()
 
     // Coroutine scope for buffer operations
-    private val bufferScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val bufferScope = CoroutineScope(
+        Dispatchers.Default + SupervisorJob()
+    )
+
     private var emitJob: Job? = null
 
     // Priority tracking for critical values
@@ -248,7 +251,15 @@ class PlcDataBuffer @Inject constructor(
      */
     fun dispose() {
         emitJob?.cancel()
-        bufferScope.cancel()
+        bufferScope.cancel() // Cancel scope properly
+
+        // Clear all data
+        boolBuffer.clear()
+        intBuffer.clear()
+        boolChanged.clear()
+        intChanged.clear()
+
+        Log.d("PlcDataBuffer", "Buffer disposed and scope cancelled")
     }
 
     /**

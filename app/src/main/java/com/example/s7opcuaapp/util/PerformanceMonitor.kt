@@ -1,11 +1,9 @@
 package com.example.s7opcuaapp.util
 
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -14,6 +12,7 @@ import javax.inject.Singleton
 
 /**
  * Performance monitoring utility to track app performance metrics
+ * Fixed version with proper lifecycle management
  */
 @Singleton
 class PerformanceMonitor @Inject constructor() {
@@ -21,6 +20,19 @@ class PerformanceMonitor @Inject constructor() {
     private val metrics = ConcurrentHashMap<MetricType, MetricData>()
     private val _performanceReport = MutableStateFlow(PerformanceReport())
     val performanceReport: StateFlow<PerformanceReport> = _performanceReport
+
+    // Managed coroutine scope
+    private val monitorScope = CoroutineScope(
+        Dispatchers.Default + SupervisorJob() +
+                CoroutineName("PerformanceMonitor")
+    )
+
+    // Cleanup job reference
+    private var cleanupJob: Job? = null
+
+    // Flag to track if monitor is active
+    @Volatile
+    private var isMonitorActive = true
 
     enum class MetricType {
         PLC_UPDATE_RATE,
@@ -43,11 +55,18 @@ class PerformanceMonitor @Inject constructor() {
             totalTime.addAndGet(value)
 
             // Update min/max
+            updateMin(value)
+            updateMax(value)
+        }
+
+        private fun updateMin(value: Long) {
             var currentMin: Long
             do {
                 currentMin = minTime.get()
             } while (value < currentMin && !minTime.compareAndSet(currentMin, value))
+        }
 
+        private fun updateMax(value: Long) {
             var currentMax: Long
             do {
                 currentMax = maxTime.get()
@@ -62,6 +81,14 @@ class PerformanceMonitor @Inject constructor() {
         fun getRate(): Double {
             val elapsed = System.currentTimeMillis() - lastResetTime.get()
             return if (elapsed > 0) count.get() * 1000.0 / elapsed else 0.0
+        }
+
+        fun reset() {
+            count.set(0)
+            totalTime.set(0)
+            minTime.set(Long.MAX_VALUE)
+            maxTime.set(0)
+            lastResetTime.set(System.currentTimeMillis())
         }
     }
 
@@ -81,46 +108,76 @@ class PerformanceMonitor @Inject constructor() {
             metrics[type] = MetricData()
         }
 
-        CoroutineScope(Dispatchers.Default).launch {
-            while (isActive) {
-                delay(300000) // Every 5 minutes
-                cleanupOldMetrics()
+        // Start cleanup job with proper scope
+        startCleanupJob()
+    }
+
+    private fun startCleanupJob() {
+        cleanupJob?.cancel() // Cancel any existing job
+
+        cleanupJob = monitorScope.launch {
+            Log.d("PerformanceMonitor", "Cleanup job started")
+
+            while (isMonitorActive && isActive) {
+                try {
+                    delay(300000) // Every 5 minutes
+
+                    if (isMonitorActive) {
+                        cleanupOldMetrics()
+                    }
+                } catch (e: CancellationException) {
+                    Log.d("PerformanceMonitor", "Cleanup job cancelled")
+                    throw e // Re-throw to properly cancel
+                } catch (e: Exception) {
+                    Log.e("PerformanceMonitor", "Error in cleanup job", e)
+                    // Continue loop even if cleanup fails
+                }
             }
+
+            Log.d("PerformanceMonitor", "Cleanup job ended")
         }
     }
 
     private fun cleanupOldMetrics() {
+        if (!isMonitorActive) return
+
         val cutoffTime = System.currentTimeMillis() - 3600000 // 1 hour
 
         metrics.forEach { (type, data) ->
-            if (data.lastResetTime.get() < cutoffTime) {
-                // Reset old metrics
-                data.count.set(0)
-                data.totalTime.set(0)
-                data.minTime.set(Long.MAX_VALUE)
-                data.maxTime.set(0)
-                data.lastResetTime.set(System.currentTimeMillis())
-
-                Log.d("PerformanceMonitor", "Reset old metrics for $type")
+            try {
+                if (data.lastResetTime.get() < cutoffTime) {
+                    data.reset()
+                    Log.d("PerformanceMonitor", "Reset old metrics for $type")
+                }
+            } catch (e: Exception) {
+                Log.e("PerformanceMonitor", "Error resetting metrics for $type", e)
             }
         }
     }
 
     fun recordPlcUpdate() {
+        if (!isMonitorActive) return
+
         metrics[MetricType.PLC_UPDATE_RATE]?.record()
         logIfExcessive(MetricType.PLC_UPDATE_RATE, 10.0, "PLC updates too frequent")
     }
 
     fun recordUiRecomposition() {
+        if (!isMonitorActive) return
+
         metrics[MetricType.UI_RECOMPOSITION_RATE]?.record()
         logIfExcessive(MetricType.UI_RECOMPOSITION_RATE, 5.0, "UI recomposing too often")
     }
 
     fun recordWriteCommand() {
+        if (!isMonitorActive) return
+
         metrics[MetricType.WRITE_COMMAND_RATE]?.record()
     }
 
     fun recordNetworkLatency(latencyMs: Long) {
+        if (!isMonitorActive) return
+
         metrics[MetricType.NETWORK_LATENCY]?.record(latencyMs)
         if (latencyMs > 1000) {
             Log.w("PerformanceMonitor", "High network latency: ${latencyMs}ms")
@@ -128,10 +185,14 @@ class PerformanceMonitor @Inject constructor() {
     }
 
     fun updateSubscriptionCount(count: Int) {
+        if (!isMonitorActive) return
+
         metrics[MetricType.SUBSCRIPTION_COUNT]?.record(count.toLong())
     }
 
     fun recordMemoryUsage() {
+        if (!isMonitorActive) return
+
         val runtime = Runtime.getRuntime()
         val usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024 // MB
         metrics[MetricType.MEMORY_USAGE]?.record(usedMemory)
@@ -145,6 +206,10 @@ class PerformanceMonitor @Inject constructor() {
     }
 
     fun generateReport(): PerformanceReport {
+        if (!isMonitorActive) {
+            return PerformanceReport() // Return empty report if not active
+        }
+
         recordMemoryUsage()
 
         val report = PerformanceReport(
@@ -163,13 +228,13 @@ class PerformanceMonitor @Inject constructor() {
     }
 
     fun reset() {
+        Log.d("PerformanceMonitor", "Resetting all metrics")
+
         metrics.forEach { (_, data) ->
-            data.count.set(0)
-            data.totalTime.set(0)
-            data.minTime.set(Long.MAX_VALUE)
-            data.maxTime.set(0)
-            data.lastResetTime.set(System.currentTimeMillis())
+            data.reset()
         }
+
+        _performanceReport.value = PerformanceReport()
     }
 
     private fun logReport(report: PerformanceReport) {
@@ -186,6 +251,8 @@ class PerformanceMonitor @Inject constructor() {
     }
 
     fun <T> measureTime(metricType: MetricType, block: () -> T): T {
+        if (!isMonitorActive) return block()
+
         val startTime = System.currentTimeMillis()
         return try {
             block()
@@ -194,6 +261,51 @@ class PerformanceMonitor @Inject constructor() {
             metrics[metricType]?.record(elapsed)
         }
     }
+
+    /**
+     * Pause monitoring without cleanup
+     */
+    fun pause() {
+        Log.d("PerformanceMonitor", "Pausing performance monitoring")
+        isMonitorActive = false
+    }
+
+    /**
+     * Resume monitoring
+     */
+    fun resume() {
+        Log.d("PerformanceMonitor", "Resuming performance monitoring")
+        isMonitorActive = true
+    }
+
+    /**
+     * Cleanup all resources - MUST be called when app terminates
+     */
+    fun cleanup() {
+        Log.d("PerformanceMonitor", "Cleaning up PerformanceMonitor")
+
+        isMonitorActive = false
+
+        // Cancel cleanup job
+        cleanupJob?.cancel()
+        cleanupJob = null
+
+        // Cancel entire scope
+        monitorScope.cancel()
+
+        // Clear all metrics
+        metrics.clear()
+
+        // Reset flow
+        _performanceReport.value = PerformanceReport()
+
+        Log.d("PerformanceMonitor", "PerformanceMonitor cleanup completed")
+    }
+
+    /**
+     * Check if monitor is active
+     */
+    fun isActive(): Boolean = isMonitorActive && monitorScope.isActive
 }
 
 private fun Double.format(decimals: Int): String = "%.${decimals}f".format(this)

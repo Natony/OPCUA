@@ -40,24 +40,21 @@ fun BoolControlItem(
             contentDescription = if (value) "On" else "Off",
             modifier = Modifier
                 .size(108.dp)
-                .then(
-                    if (isProcessing) {
-                        Modifier.alpha(0.7f) // Làm mờ nhẹ thay vì đổi màu
-                    } else {
-                        Modifier
+                .alpha(
+                    when {
+                        !enabled -> 0.3f       // Mờ 30% khi disabled
+                        isProcessing -> 0.7f   // Mờ 70% khi processing
+                        else -> 1f             // Full opacity khi normal
                     }
                 ),
-            tint = when {
-                !enabled -> Color.Gray
-                else -> Color.Unspecified
-            }
+            tint = Color.Unspecified  // KHÔNG tint màu, giữ nguyên màu gốc
         )
 
         // Show loading indicator if processing
         if (isProcessing) {
             CircularProgressIndicator(
                 modifier = Modifier
-                    .size(28.dp) // Tăng size để dễ thấy hơn
+                    .size(28.dp)
                     .align(Alignment.Center),
                 strokeWidth = 3.dp,
                 color = MaterialTheme.colorScheme.primary

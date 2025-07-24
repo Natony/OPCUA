@@ -15,6 +15,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.alpha
 
 /**
  * Simple Press/Release button with guaranteed release on up
@@ -31,7 +32,6 @@ fun PressReleaseBoolControlItem(
 ) {
     var isPressed by remember { mutableStateOf(false) }
 
-    // Cleanup when disabled or unmounted
     DisposableEffect(enabled) {
         onDispose {
             if (isPressed) {
@@ -44,19 +44,17 @@ fun PressReleaseBoolControlItem(
     Box(
         modifier = modifier
             .size(108.dp)
+            .alpha(if (enabled) 1f else 0.3f)  // Mờ cả box khi disabled
             .then(
                 if (enabled) {
                     Modifier.pointerInput(Unit) {
                         detectTapGestures(
                             onPress = {
-                                // On press down
                                 isPressed = true
                                 onPress()
 
-                                // Wait for up - this is guaranteed to be called
                                 val released = tryAwaitRelease()
 
-                                // On release (always called, even on cancel)
                                 isPressed = false
                                 onRelease()
                             }
@@ -73,9 +71,8 @@ fun PressReleaseBoolControlItem(
             contentDescription = null,
             modifier = Modifier.size(108.dp),
             tint = when {
-                !enabled -> Color.Gray
-                isPressed -> Color.Yellow
-                else -> Color.Unspecified
+                isPressed -> Color(0xFFFFEB3B).copy(alpha = 0.8f)  // Vàng nhạt khi pressed
+                else -> Color.Unspecified  // Giữ màu gốc
             }
         )
     }

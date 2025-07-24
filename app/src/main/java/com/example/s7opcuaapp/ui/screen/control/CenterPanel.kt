@@ -29,6 +29,9 @@ fun CenterPanel(
     val data = uiState.plcData
     val isWriting = uiState.isWriting
 
+    val SEND_ALL_BUTTON_INDEX = 999
+    val isSendAllLocked = SEND_ALL_BUTTON_INDEX in uiState.lockedButtons
+
     Column(
         modifier = modifier
             .fillMaxHeight()
@@ -273,43 +276,13 @@ fun CenterPanel(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Button(
+                SendAllButton(
+                    isAutoMode = isAuto,
+                    isWriting = isWriting,
+                    isLocked = isSendAllLocked,
                     onClick = onSendAll,
-                    enabled = !isAuto && !isWriting,  // Chỉ enable khi Manual mode và không đang write
-                    modifier = Modifier.fillMaxWidth(),  // cho button trải hết khung Box
-                    colors = ButtonDefaults.buttonColors(
-                        disabledContainerColor = if (isAuto) {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                        }
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isWriting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Text(
-                            text = when {
-                                isAuto -> "CHẠY"  // Hiển thị khi đang ở Auto mode
-                                isWriting -> "Đang xử lý..."
-                                else -> "CHẠY"
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

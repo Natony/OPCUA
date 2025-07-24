@@ -17,6 +17,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -43,16 +45,35 @@ class ControlViewModel @Inject constructor(
     private val uiUpdateThrottle = 300L
     private var lastUiUpdateTime = 0L
 
+    // THREAD-SAFE: Use ConcurrentHashMap for button states
+    private val buttonStates = ConcurrentHashMap<Int, ButtonState>()
+
     // Global processing lock - chỉ cho phép 1 operation tại 1 thời điểm
     private val globalProcessingLock = Mutex()
-    private var currentProcessingButton: Int? = null
 
     private val pressedButtons = mutableSetOf<Int>()
 
+    // THREAD-SAFE: Mutex for critical sections
+    private val buttonOperationMutex = Mutex()
+    private val globalProcessingMutex = Mutex()
+
+    // THREAD-SAFE: Atomic reference for current processing button
+    @Volatile
+    private var currentProcessingButton: Int? = null
+
+
+    // Button state tracking
+    private data class ButtonState(
+        val index: Int,
+        val isPressed: Boolean,
+        val lastActionTime: Long,
+        val operationJob: Job? = null
+    )
 
     companion object {
         const val BOOL_OFFSET = 0
         const val INT_OFFSET = 200
+        const val MIN_BUTTON_ACTION_INTERVAL = 100L // Minimum 100ms between actions
     }
 
     init {
@@ -144,18 +165,8 @@ class ControlViewModel @Inject constructor(
                 allButtons - it
             } ?: allButtons
         } else {
-            val busyButtons = if (currentProcessingButton != null) {
-                setOf(currentProcessingButton!!)
-            } else {
-                emptySet()
-            }
-
-            // Kết hợp cả 2 loại locks
-            val buttonLocks = buttonLockConfig.getLockedButtons(activeButtons, busyButtons)
-            val statusLocks = statusLockConfig.getLockedButtonsForStatus(currentStatus)
-
-            // Union của 2 sets
-            buttonLocks + statusLocks
+            // CHỈ SỬ DỤNG STATUS LOCKS
+            statusLockConfig.getLockedButtonsForStatus(currentStatus)
         }
 
         _uiState.update {
@@ -168,22 +179,97 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Internal thread-safe button release implementation
+     */
+    private suspend fun performButtonRelease(index: Int): Boolean {
+        val currentState = buttonStates[index]
+        if (currentState?.isPressed != true) {
+            Log.w("ControlVM", "Button $index not pressed, ignoring release")
+            return false
+        }
+
+        try {
+            // Cancel any ongoing operation
+            currentState.operationJob?.cancel()
+
+            // Remove from pressed set
+            pressedButtons.remove(index)
+
+            // Update UI state
+            updateButtonStates { it - index }
+
+            // Write to PLC
+            if (connectionStarted) {
+                repoImpl.writeBoolean(index, false)
+            }
+
+            // Update button state
+            buttonStates[index] = currentState.copy(
+                isPressed = false,
+                lastActionTime = System.currentTimeMillis(),
+                operationJob = null
+            )
+
+            // Clear current processing if it's this button
+            if (currentProcessingButton == index) {
+                currentProcessingButton = null
+            }
+
+            Log.d("ControlVM", "✅ Button $index released successfully")
+            return true
+
+        } catch (e: Exception) {
+            Log.e("ControlVM", "Error releasing button $index", e)
+            return false
+        }
+    }
+
+    /**
+     * THREAD-SAFE: Release all buttons in a group except one
+     */
+    private suspend fun releaseButtonGroup(group: Set<Int>, except: Int? = null) {
+        coroutineScope {
+            group.filter { it != except && pressedButtons.contains(it) }
+                .map { buttonIndex ->
+                    async {
+                        performButtonRelease(buttonIndex)
+                    }
+                }
+                .awaitAll()
+        }
+    }
+
+    /**
+     * THREAD-SAFE: Update UI button states
+     */
+    private suspend fun updateButtonStates(transform: (Set<Int>) -> Set<Int>) {
+        _uiState.update { currentState ->
+            currentState.copy(
+                busyButtons = transform(currentState.busyButtons)
+            )
+        }
+    }
+
+    /**
+     * THREAD-SAFE: Get all active buttons
+     */
     private fun getActiveButtons(data: PlcData): Set<Int> {
-        val active = mutableSetOf<Int>()
+        val active = Collections.synchronizedSet(mutableSetOf<Int>())
 
         // Check bool buttons
         data.bools.forEachIndexed { index, value ->
             if (value) active.add(index)
         }
 
-        // Check int buttons (3-4) for non-zero values
+        // Check int buttons
         listOf(3, 4).forEach { index ->
             if ((data.ints.getOrNull(index) ?: 0) != 0) {
                 active.add(index + INT_OFFSET)
             }
         }
 
-        return active
+        return active.toSet() // Return immutable copy
     }
 
     /**
@@ -256,18 +342,26 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+    /**
+     * THREAD-SAFE: Toggle boolean with proper locking
+     */
     fun onToggleBoolean(index: Int, newValue: Boolean) {
         viewModelScope.launch {
-            // Giữ lockedButtons cũ, chỉ show busyButtons
-            _uiState.update { it.copy(busyButtons = setOf(index)) }
-            try {
-                repoImpl.writeBoolean(index, newValue)
-            } catch (e: Exception) {
-                // lỗi
-            } finally {
-                // Khi PLC phản hồi, dataObservationJob thu về data mới,
-                // updateUIWithPlcData sẽ tính lại lockedButtons hợp lý
-                _uiState.update { it.copy(busyButtons = emptySet()) }
+            globalProcessingMutex.withLock {
+                try {
+                    // Update UI to show processing
+                    _uiState.update { it.copy(busyButtons = it.busyButtons + index) }
+
+                    // Write to PLC
+                    repoImpl.writeBoolean(index, newValue)
+
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Error toggling boolean $index", e)
+                    _uiState.update { it.copy(errorMessage = e.message) }
+                } finally {
+                    // Clear busy state
+                    _uiState.update { it.copy(busyButtons = it.busyButtons - index) }
+                }
             }
         }
     }
@@ -296,141 +390,90 @@ class ControlViewModel @Inject constructor(
             _uiState.update { it.copy(isWriting = false) }
         }
     }
-//    fun onStartPress(index: Int) {
-//        viewModelScope.launch {
-//            try {
-//                // Kiểm tra điều kiện cơ bản
-//                val state = _uiState.value
-//                if (!connectionStarted || index in state.lockedButtons) {
-//                    Log.d("ControlVM", "❌ Cannot press button $index - not ready or locked")
-//                    return@launch
-//                }
-//
-//                // Kiểm tra xem có operation nào đang chạy không
-//                if (currentProcessingButton != null) {
-//                    Log.d("ControlVM", "❌ Cannot press button $index - button $currentProcessingButton is processing")
-//                    return@launch
-//                }
-//
-//                // Mark as processing
-//                currentProcessingButton = index
-//
-//                // Update UI ngay lập tức
-//                _uiState.update { currentState ->
-//                    val allButtons = (0..14).toSet() + (203..230).toSet()
-//                    currentState.copy(
-//                        isWriting = true,
-//                        busyButtons = setOf(index),
-//                        lockedButtons = allButtons - index
-//                    )
-//                }
-//
-//                // Write true với timeout
-//                withTimeout(3000) { // 3 giây timeout
-//                    repoImpl.writeBoolean(index, true)
-//                }
-//
-//                Log.d("ControlVM", "✅ Button $index pressed")
-//
-//            } catch (e: Exception) {
-//                Log.e("ControlVM", "❌ Error in onStartPress for button $index", e)
-//
-//                // QUAN TRỌNG: Clear state khi có lỗi
-//                if (currentProcessingButton == index) {
-//                    currentProcessingButton = null
-//                    _uiState.update {
-//                        it.copy(
-//                            isWriting = false,
-//                            busyButtons = emptySet(),
-//                            errorMessage = "Press failed: ${e.message}"
-//                        )
-//                    }
-//
-//                    // Force update UI
-//                    updateUIWithPlcData(_uiState.value.plcData)
-//                }
-//            }
-//        }
-//    }
 
-//    fun onEndPress(index: Int) {
-//        viewModelScope.launch {
-//            try {
-//                // Chỉ xử lý nếu đây là button đang được press
-//                if (currentProcessingButton == index && connectionStarted) {
-//                    // Write false với timeout
-//                    withTimeout(3000) { // 3 giây timeout
-//                        repoImpl.writeBoolean(index, false)
-//                    }
-//                    Log.d("ControlVM", "✅ Button $index released")
-//                }
-//            } catch (e: Exception) {
-//                Log.e("ControlVM", "❌ Error in onEndPress for button $index", e)
-//            } finally {
-//                // LUÔN LUÔN clear state khi release
-//                if (currentProcessingButton == index) {
-//                    currentProcessingButton = null
-//                    _uiState.update {
-//                        it.copy(
-//                            isWriting = false,
-//                            busyButtons = emptySet()
-//                        )
-//                    }
-//
-//                    // Force update UI
-//                    updateUIWithPlcData(_uiState.value.plcData)
-//                }
-//            }
-//        }
-//    }
-
+    /**
+     * THREAD-SAFE: Press button with proper synchronization
+     */
     fun onPressButton(index: Int) {
         viewModelScope.launch {
-            try {
-                // Check if already pressed
-                if (index in pressedButtons) {
-                    Log.w("ControlVM", "Button $index already pressed, ignoring")
-                    return@launch
-                }
-
-                // Check if connected
-                if (!connectionStarted) {
-                    Log.e("ControlVM", "Cannot press button $index - not connected")
-                    return@launch
-                }
-
-                // For manual movement buttons (0,1,2,3), release any other pressed manual button
-                val manualButtons = setOf(0, 1, 2, 3)
-                if (index in manualButtons) {
-                    val otherPressedManualButtons = pressedButtons.intersect(manualButtons - index)
-                    otherPressedManualButtons.forEach { otherButton ->
-                        Log.d("ControlVM", "🔄 Auto-releasing manual button $otherButton before pressing $index")
-                        onReleaseButton(otherButton)
-                    }
-                    // Small delay to ensure release is processed
-                    delay(50)
-                }
-
-                // Add to pressed set
-                pressedButtons.add(index)
-
-                // Update UI to show button is active
-                _uiState.update { state ->
-                    state.copy(busyButtons = state.busyButtons + index)
-                }
-
-                // Write true to PLC
-                Log.d("ControlVM", "➡️ Pressing button $index")
-                repoImpl.writeBoolean(index, true)
-
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Error pressing button $index", e)
-                // Remove from pressed set on error
-                pressedButtons.remove(index)
-                _uiState.update { state ->
-                    state.copy(busyButtons = state.busyButtons - index)
-                }
+            val success = buttonOperationMutex.withLock {
+                performButtonPress(index)
             }
+
+            if (!success) {
+                Log.w("ControlVM", "Button $index press rejected")
+            }
+        }
+    }
+    /**
+     * Internal thread-safe button press implementation
+     */
+    private suspend fun performButtonPress(index: Int): Boolean {
+        // Check if button is already pressed
+        val currentState = buttonStates[index]
+        if (currentState?.isPressed == true) {
+            Log.w("ControlVM", "Button $index already pressed")
+            return false
+        }
+
+        // Check minimum interval between actions
+        val now = System.currentTimeMillis()
+        if (currentState != null && (now - currentState.lastActionTime) < MIN_BUTTON_ACTION_INTERVAL) {
+            Log.w("ControlVM", "Button $index action too fast")
+            return false
+        }
+
+        // Check if another button is being processed globally
+        if (!globalProcessingMutex.tryLock()) {
+            Log.w("ControlVM", "Another button operation in progress")
+            return false
+        }
+
+        try {
+            // For manual movement buttons, release others in group
+            val manualButtons = setOf(0, 1, 2, 3)
+            if (index in manualButtons) {
+                releaseButtonGroup(manualButtons, except = index)
+            }
+
+            // Create new button state
+            val newState = ButtonState(
+                index = index,
+                isPressed = true,
+                lastActionTime = now,
+                operationJob = viewModelScope.launch {
+                    try {
+                        // Add to pressed set
+                        pressedButtons.add(index)
+
+                        // Update UI state
+                        updateButtonStates { it + index }
+
+                        // Write to PLC
+                        repoImpl.writeBoolean(index, true)
+
+                        Log.d("ControlVM", "✅ Button $index pressed successfully")
+                    } catch (e: Exception) {
+                        Log.e("ControlVM", "Error pressing button $index", e)
+                        // Cleanup on error
+                        pressedButtons.remove(index)
+                        updateButtonStates { it - index }
+                        throw e
+                    }
+                }
+            )
+
+            // Store button state
+            buttonStates[index] = newState
+            currentProcessingButton = index
+
+            return true
+
+        } catch (e: Exception) {
+            Log.e("ControlVM", "Failed to press button $index", e)
+            return false
+        } finally {
+            globalProcessingMutex.unlock()
         }
     }
 
@@ -438,36 +481,18 @@ class ControlViewModel @Inject constructor(
      * Handle button release with local state management
      * Returns true if successful
      */
+
+
+    /**
+     * THREAD-SAFE: Release button with proper synchronization
+     */
     fun onReleaseButton(index: Int) {
         viewModelScope.launch {
-            try {
-                // Always try to release, even if not in pressed set
-                Log.d("ControlVM", "⬅️ Releasing button $index")
-
-                // Remove from pressed set
-                pressedButtons.remove(index)
-
-                // Update UI
-                _uiState.update { state ->
-                    state.copy(busyButtons = state.busyButtons - index)
-                }
-
-                // Write false to PLC (always try, even if connection lost)
-                if (connectionStarted) {
-                    repoImpl.writeBoolean(index, false)
-                }
-
-            } catch (e: Exception) {
-                Log.e("ControlVM", "Error releasing button $index", e)
-                // Still remove from sets even on error
-                pressedButtons.remove(index)
-                _uiState.update { state ->
-                    state.copy(busyButtons = state.busyButtons - index)
-                }
+            buttonOperationMutex.withLock {
+                performButtonRelease(index)
             }
         }
     }
-
     fun resetProcessingState() {
         viewModelScope.launch {
             Log.d("ControlVM", "🔄 Resetting processing state")
@@ -499,31 +524,35 @@ class ControlViewModel @Inject constructor(
     /**
      * Clean up any stuck press/release operations
      */
+    /**
+     * THREAD-SAFE: Release all pressed buttons
+     */
     fun releaseAllButtons() {
         viewModelScope.launch {
-            Log.d("ControlVM", "🔄 Releasing all pressed buttons: $pressedButtons")
+            buttonOperationMutex.withLock {
+                Log.d("ControlVM", "🔄 Releasing all pressed buttons")
 
-            val buttonsCopy = pressedButtons.toSet()
-            pressedButtons.clear()
+                val buttonsCopy = pressedButtons.toList() // Thread-safe copy
 
-            // Update UI immediately
-            _uiState.update { state ->
-                state.copy(busyButtons = state.busyButtons - buttonsCopy)
-            }
-
-            // Try to release each button
-            buttonsCopy.forEach { index ->
-                try {
-                    if (connectionStarted) {
-                        repoImpl.writeBoolean(index, false)
-                    }
-                } catch (e: Exception) {
-                    Log.e("ControlVM", "Error releasing button $index during cleanup", e)
+                coroutineScope {
+                    buttonsCopy.map { index ->
+                        async {
+                            try {
+                                performButtonRelease(index)
+                            } catch (e: Exception) {
+                                Log.e("ControlVM", "Error releasing button $index", e)
+                            }
+                        }
+                    }.awaitAll()
                 }
+
+                // Clear all states
+                buttonStates.clear()
+                pressedButtons.clear()
+                currentProcessingButton = null
             }
         }
     }
-
     fun confirmNumber(index: Int, value: Int) {
         viewModelScope.launch {
             val buttonIndex = index + INT_OFFSET
@@ -536,8 +565,15 @@ class ControlViewModel @Inject constructor(
 
     fun onSendAll() {
         viewModelScope.launch {
-            // Use a special index for "send all" operation
-            executeButtonAction(999, "send all") {
+            // Check if Send All button is locked
+            val sendAllIndex = 999
+            if (sendAllIndex in _uiState.value.lockedButtons) {
+                Log.w("ControlVM", "Send All button is locked by status")
+                return@launch
+            }
+
+            // Use special index for "send all" operation
+            executeButtonAction(sendAllIndex, "send all") {
                 // Write function code
                 repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
 
