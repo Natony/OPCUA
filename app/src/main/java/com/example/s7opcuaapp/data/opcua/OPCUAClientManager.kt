@@ -32,6 +32,7 @@ import org.eclipse.milo.opcua.stack.core.types.structured.MonitoredItemCreateReq
 import org.eclipse.milo.opcua.stack.core.types.enumerated.MonitoringMode
 import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
 import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
+import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 object OPCUAClientManager {
@@ -55,24 +56,21 @@ object OPCUAClientManager {
             Log.d("OPCUAClient", "🔌 Connecting to $endpointUrl...")
 
             // 1) Lấy danh sách endpoint từ server
-            val endpointsFuture: CompletableFuture<List<EndpointDescription>> =
-                DiscoveryClient.getEndpoints(endpointUrl)
-
             val endpoints = withContext(Dispatchers.IO) {
                 try {
                     withTimeout(5000L) { // 5 second timeout
-                        suspendCancellableCoroutine<List<EndpointDescription>> { cont ->
+                        suspendCancellableCoroutine<List<EndpointDescription>> { continuation ->
                             val future = DiscoveryClient.getEndpoints(endpointUrl)
 
-                            cont.invokeOnCancellation {
+                            continuation.invokeOnCancellation {
                                 future.cancel(true)
                             }
 
                             future.whenComplete { result, throwable ->
                                 if (throwable != null) {
-                                    cont.resumeWithException(throwable)
+                                    continuation.resumeWithException(throwable)
                                 } else {
-                                    cont.resume(result)
+                                    continuation.resume(result)
                                 }
                             }
                         }
@@ -82,6 +80,7 @@ object OPCUAClientManager {
                     throw e
                 }
             }
+
             // 2) Chọn endpoint có SecurityPolicy=None
             val noSecEndpoint: EndpointDescription? = endpoints.firstOrNull {
                 it.securityPolicyUri == SecurityPolicy.None.uri
@@ -121,18 +120,18 @@ object OPCUAClientManager {
             client = OpcUaClient.create(config)
 
             withTimeout(5000L) {
-                suspendCancellableCoroutine<Unit> { cont ->
+                suspendCancellableCoroutine<Unit> { continuation ->
                     val future = client!!.connect()
 
-                    cont.invokeOnCancellation {
+                    continuation.invokeOnCancellation {
                         future.cancel(true)
                     }
 
                     future.whenComplete { _, throwable ->
                         if (throwable != null) {
-                            cont.resumeWithException(throwable)
+                            continuation.resumeWithException(throwable)
                         } else {
-                            cont.resume(Unit)
+                            continuation.resume(Unit)
                         }
                     }
                 }
@@ -159,7 +158,20 @@ object OPCUAClientManager {
         val cli = client ?: return@withContext
         try {
             if (subscription == null) {
-                subscription = cli.subscriptionManager.createSubscription(250.0).get()
+                val createSubFuture = cli.subscriptionManager.createSubscription(250.0)
+                subscription = suspendCancellableCoroutine { continuation ->
+                    continuation.invokeOnCancellation {
+                        createSubFuture.cancel(true)
+                    }
+
+                    createSubFuture.whenComplete { result, throwable ->
+                        if (throwable != null) {
+                            continuation.resumeWithException(throwable)
+                        } else {
+                            continuation.resume(result)
+                        }
+                    }
+                }
                 Log.d("OPCUAClient", "📡 Subscription created (250ms)")
             }
             val sub = subscription!!
@@ -186,10 +198,24 @@ object OPCUAClientManager {
                 monitoringParams
             )
 
-            val items = sub.createMonitoredItems(
+            val createItemsFuture = sub.createMonitoredItems(
                 TimestampsToReturn.Both,
                 listOf(request)
-            ).get()
+            )
+
+            val items = suspendCancellableCoroutine<List<org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaMonitoredItem>> { continuation ->
+                continuation.invokeOnCancellation {
+                    createItemsFuture.cancel(true)
+                }
+
+                createItemsFuture.whenComplete { result, throwable ->
+                    if (throwable != null) {
+                        continuation.resumeWithException(throwable)
+                    } else {
+                        continuation.resume(result)
+                    }
+                }
+            }
 
             items.forEach { item ->
                 item.setValueConsumer { _, dataValue ->
@@ -223,9 +249,23 @@ object OPCUAClientManager {
                     return@withContext null
                 }
             }
-            val dataValue = DataValue(variant, null, null) // Thêm timestamp
+            val dataValue = DataValue(variant, null, null)
 
-            val status = cli.writeValue(nodeId, dataValue).get()
+            val writeFuture = cli.writeValue(nodeId, dataValue)
+            val status = suspendCancellableCoroutine<StatusCode> { continuation ->
+                continuation.invokeOnCancellation {
+                    writeFuture.cancel(true)
+                }
+
+                writeFuture.whenComplete { result, throwable ->
+                    if (throwable != null) {
+                        continuation.resumeWithException(throwable)
+                    } else {
+                        continuation.resume(result)
+                    }
+                }
+            }
+
             if (status.isGood) {
                 Log.d("OPCUAClient", "✅ Write successful: $nodeIdString = $rawValue")
             } else {
@@ -242,10 +282,23 @@ object OPCUAClientManager {
         val cli = client ?: return@withContext null
         try {
             val nodeId = NodeId.parse(nodeIdString)
-            // Tạo ReadValueId để chỉ định thuộc tính AccessLevel
             val readValueId = ReadValueId(nodeId, AttributeId.AccessLevel.uid(), null, null)
-            // Gọi hàm read với danh sách ReadValueId
-            val response = cli.read(0.0, TimestampsToReturn.Neither, listOf(readValueId)).get()
+
+            val readFuture = cli.read(0.0, TimestampsToReturn.Neither, listOf(readValueId))
+            val response = suspendCancellableCoroutine<org.eclipse.milo.opcua.stack.core.types.structured.ReadResponse> { continuation ->
+                continuation.invokeOnCancellation {
+                    readFuture.cancel(true)
+                }
+
+                readFuture.whenComplete { result, throwable ->
+                    if (throwable != null) {
+                        continuation.resumeWithException(throwable)
+                    } else {
+                        continuation.resume(result)
+                    }
+                }
+            }
+
             val dataValue = response.results?.firstOrNull()
             dataValue?.value?.value as? UByte
         } catch (e: Exception) {
@@ -262,14 +315,45 @@ object OPCUAClientManager {
             client?.let { cli ->
                 subscription?.let { sub ->
                     try {
-                        sub.deleteMonitoredItems(sub.monitoredItems).get()
+                        val deleteItemsFuture = sub.deleteMonitoredItems(sub.monitoredItems)
+                        suspendCancellableCoroutine<List<StatusCode>> { continuation ->
+                            continuation.invokeOnCancellation {
+                                deleteItemsFuture.cancel(true)
+                            }
+
+                            deleteItemsFuture.whenComplete { result, throwable ->
+                                if (throwable != null) {
+                                    Log.w("OPCUAClient", "Error deleting monitored items", throwable)
+                                    // Don't fail disconnection for this
+                                    continuation.resume(emptyList())
+                                } else {
+                                    continuation.resume(result)
+                                }
+                            }
+                        }
                         Log.d("OPCUAClient", "🗑️ Deleted all monitored items")
                     } catch (e: Exception) {
                         Log.w("OPCUAClient", "Error deleting monitored items", e)
                     }
                 }
                 subscription = null
-                cli.disconnect().get()
+
+                val disconnectFuture = cli.disconnect()
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    continuation.invokeOnCancellation {
+                        disconnectFuture.cancel(true)
+                    }
+
+                    disconnectFuture.whenComplete { _, throwable ->
+                        if (throwable != null) {
+                            Log.w("OPCUAClient", "Error during disconnect", throwable)
+                            // Don't fail for disconnect errors
+                            continuation.resume(Unit)
+                        } else {
+                            continuation.resume(Unit)
+                        }
+                    }
+                }
                 Log.d("OPCUAClient", "🔌 Disconnected successfully")
             }
         } catch (e: Exception) {
@@ -282,8 +366,11 @@ object OPCUAClientManager {
 
     fun isConnected(): Boolean {
         return client?.let {
-            try { it.session != null }
-            catch (e: Exception) { false }
+            try {
+                it.session != null
+            } catch (e: Exception) {
+                false
+            }
         } ?: false
     }
 }

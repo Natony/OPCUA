@@ -1,5 +1,6 @@
 package com.example.s7opcuaapp.di
 
+import android.content.Context
 import com.example.s7opcuaapp.data.buffer.PlcDataBuffer
 import com.example.s7opcuaapp.data.local.AppDatabase
 import com.example.s7opcuaapp.data.local.PrefsManager
@@ -12,12 +13,21 @@ import com.example.s7opcuaapp.util.StatusLockConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object RepositoryModule {
+
+    @Provides
+    @Singleton
+    fun provideNetworkConnectivity(
+        @ApplicationContext context: Context
+    ): NetworkConnectivity {
+        return NetworkConnectivity(context)
+    }
 
     @Provides
     @Singleton
@@ -32,7 +42,6 @@ object RepositoryModule {
     ): PlcDataBuffer {
         return PlcDataBuffer(performanceMonitor)
     }
-
 
     @Provides
     @Singleton

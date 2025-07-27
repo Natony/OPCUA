@@ -115,10 +115,15 @@ class ControlViewModel @Inject constructor(
 
     // ==================== INITIALIZATION ====================
     init {
-        delay(100)
+        // Initialize immediately without delay
         initializeMonitoring()
-        observeLoadingProgress()
-        observeNetworkState()
+
+        // Start async initialization
+        viewModelScope.launch {
+            delay(100) // ✅ Suspend function trong coroutine scope
+            observeLoadingProgress()
+            observeNetworkState()
+        }
     }
 
     private fun observeNetworkState() {
