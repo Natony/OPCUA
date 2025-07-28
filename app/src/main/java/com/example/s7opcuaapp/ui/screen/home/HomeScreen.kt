@@ -113,6 +113,7 @@ fun HomeScreen(
                         navController?.navigate("login_history")
                     }
                 )
+
             }
         }
 
@@ -133,6 +134,7 @@ fun HomeScreen(
 
             // Có thể thêm card khác nếu cần
             Spacer(modifier = Modifier.weight(1f))
+
         }
 
         // System Info

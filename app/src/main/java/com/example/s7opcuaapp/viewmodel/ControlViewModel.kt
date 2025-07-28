@@ -29,8 +29,7 @@ class ControlViewModel @Inject constructor(
     private val performanceMonitor: PerformanceMonitor,
     private val buttonLockConfig: ButtonLockConfig,
     private val statusLockConfig: StatusLockConfig,
-    private val connectionTimeoutManager: ConnectionTimeoutManager
-
+    private val connectionTimeoutManager: ConnectionTimeoutManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ControlUiState())
@@ -103,11 +102,32 @@ class ControlViewModel @Inject constructor(
             repoImpl.observeLoadingPercent()
                 .catch { err ->
                     Log.e("ControlVM", "Error observing loading percent", err)
-                    _uiState.update { it.copy(errorMessage = "Loading error: ${err.message}") }
+                    _uiState.update {
+                        it.copy(
+                            loadingPercent = -1,
+                            errorMessage = "Loading error: ${err.message}"
+                        )
+                    }
                 }
                 .collect { pct ->
                     Log.d("ControlVM", "Loading percent = $pct")
                     _uiState.update { it.copy(loadingPercent = pct) }
+
+                    // Handle error state
+                    if (pct == -1) {
+                        Log.e("ControlVM", "Connection failed detected from loading percent")
+                        connectionTimeoutManager.cancelTimeout()
+                        _connectionState.value = ConnectionState.Failed("Connection failed")
+                        connectionStarted = false
+
+                        // Cancel all ongoing operations
+                        releaseAllButtons()
+                        resetProcessingState()
+
+                        // Cancel data observation job
+                        dataObservationJob?.cancel()
+                        dataObservationJob = null
+                    }
                 }
         }
     }
@@ -433,10 +453,25 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+
     /**
      * THREAD-SAFE: Toggle boolean with proper locking
      */
     fun onToggleBoolean(index: Int, newValue: Boolean) {
+
+        if (_uiState.value.controlsBlockedByAlarm) {
+            _uiState.update {
+                it.copy(errorMessage = "Điều khiển bị khóa do cảnh báo hệ thống")
+            }
+            return
+        }
+
+        // Check if connected first
+        if (!connectionStarted || _uiState.value.loadingPercent != 100) {
+            Log.w("ControlVM", "Cannot toggle boolean - not connected")
+            return
+        }
+
         viewModelScope.launch {
             globalProcessingMutex.withLock {
                 try {

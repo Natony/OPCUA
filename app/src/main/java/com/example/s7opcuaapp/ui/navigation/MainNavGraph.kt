@@ -5,6 +5,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -13,13 +14,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.s7opcuaapp.ui.screen.alarm.AlarmScreen
 import com.example.s7opcuaapp.ui.screen.config.ConfigScreen
 import com.example.s7opcuaapp.ui.screen.control.ControlScreen
 import com.example.s7opcuaapp.ui.screen.home.HomeScreen
 import com.example.s7opcuaapp.ui.screen.history.LoginHistoryScreen
 import com.example.s7opcuaapp.ui.screen.usermanager.UserManagerScreen
 import com.example.s7opcuaapp.viewmodel.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,12 +112,6 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 HomeScreen(navController = topNavController)
             }
 
-            composable("alarm") {
-                val alarmViewModel: AlarmViewModel = hiltViewModel()
-                val uiState by alarmViewModel.uiState.collectAsStateWithLifecycle()
-                AlarmScreen(uiState = uiState)
-            }
-
             composable("user_manager") {
                 val userManagerViewModel: UserManagerViewModel = hiltViewModel()
                 UserManagerScreen(viewModel = userManagerViewModel)
@@ -157,9 +152,18 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     },
                     onAddDevice = { configViewModel.onAddDevice() },
                     onRemoveDevice = { device -> configViewModel.onRemoveDevice(device) },
+
                     onSelectDevice = { device ->
                         configViewModel.onSelectDevice(device) {
-                            controlViewModel.restartConnection()
+                            // Stop current connection first
+                            controlViewModel.stopConnection()
+                            // Wait a bit for cleanup
+                            kotlinx.coroutines.GlobalScope.launch {
+                                kotlinx.coroutines.delay(1000)
+                                // Then restart with new device
+                                controlViewModel.restartConnection()
+                            }
+                            // Navigate back to control
                             topNavController.navigate("control") {
                                 popUpTo("control") { inclusive = true }
                             }
@@ -169,6 +173,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onCancelEdit = { configViewModel.onCancelEdit() }
                 )
             }
+
         }
     }
 

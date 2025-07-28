@@ -13,5 +13,6 @@ data class ControlUiState(
     val loadingPercent: Int = 0,
     val lockedButtons: Set<Int> = emptySet(),
     val busyButtons: Set<Int> = emptySet(),
-    val isProcessing: Boolean = false
+    val isProcessing: Boolean = false,
+    val controlsBlockedByAlarm: Boolean = false
 )

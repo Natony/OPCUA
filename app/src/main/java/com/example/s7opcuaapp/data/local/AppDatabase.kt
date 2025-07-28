@@ -13,7 +13,7 @@ import com.example.s7opcuaapp.data.local.dao.*
         User::class,
         LoginHistory::class,
         DeviceAccessLog::class,
-        DeviceEntity::class
+        DeviceEntity::class,
     ],
     version = 1,
     exportSchema = true

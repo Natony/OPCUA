@@ -163,13 +163,11 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                     } else {
                         consecutiveFailures++
 
+
                         if (consecutiveFailures >= maxConsecutiveFailures) {
                             Log.e("OPCUARepo", "💥 Max failures reached, stopping")
                             // Set loading percent to -1 to indicate error
-                            loadingTracker.reset()
-                            _uiState.update {
-                                it.copy(loadingPercent = -1)
-                            }
+                            loadingTracker.setError()
                             break
                         }
 
@@ -191,6 +189,12 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                 Log.e("OPCUARepo", "💥 Connection loop error", e)
                 isConnected.set(false)
                 consecutiveFailures++
+
+                // Set error state if max failures reached
+                if (consecutiveFailures >= maxConsecutiveFailures) {
+                    loadingTracker.setError()
+                }
+
                 delay(5000)
             }
         }

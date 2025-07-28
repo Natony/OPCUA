@@ -5,40 +5,22 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.s7opcuaapp.ui.components.NumberInputDialog
 import com.example.s7opcuaapp.ui.components.PerformanceOverlay
 import com.example.s7opcuaapp.ui.components.SingleTouchHandler
 import com.example.s7opcuaapp.BuildConfig
 import androidx.compose.ui.platform.LocalInspectionMode
 import com.example.s7opcuaapp.ui.components.ConnectionOverlay
-import com.example.s7opcuaapp.viewmodel.ControlViewModel.ConnectionState
 import kotlinx.coroutines.delay
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-
-class ConnectionLifecycleObserver(
-    private val onStop: () -> Unit
-) : DefaultLifecycleObserver {
-
-    override fun onStop(owner: LifecycleOwner) {
-        super.onStop(owner)
-        onStop()
-    }
-}
+import android.util.Log
 
 @Composable
 fun ControlScreen(
@@ -64,18 +46,31 @@ fun ControlScreen(
 
     // Handle connection timeout/error
     LaunchedEffect(loadingPercent) {
+        Log.d("ControlScreen", "Loading percent changed: $loadingPercent")
         if (loadingPercent == -1) {
-            // Wait 3 seconds then navigate to config
-            delay(3000)
+            Log.e("ControlScreen", "Connection failed, navigating to config in 1 second...")
+            delay(1000)
+            Log.d("ControlScreen", "Navigating to config now")
             onNavigateToConfig()
         }
     }
 
-    // Dialog nhập
+    // Safety mechanism: If stuck in loading for too long
+    LaunchedEffect(loadingPercent) {
+        if (loadingPercent in 1..99) {
+            delay(30000) // 30 seconds timeout
+            if (uiState.loadingPercent in 1..99) {
+                Log.e("ControlScreen", "Loading timeout after 30 seconds")
+                onNavigateToConfig()
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        SingleTouchHandler(modifier = Modifier.fillMaxSize()) {
-            if (loadingPercent == 100) {
+        // Main UI - ONLY show when fully connected
+        if (loadingPercent == 100) {
+            SingleTouchHandler(modifier = Modifier.fillMaxSize()) {
+                // Dialog
                 uiState.openDialogForIndex?.let { idx ->
                     NumberInputDialog(
                         title = uiState.dialogTitle.ifBlank { "Nhập giá trị" },
@@ -85,6 +80,7 @@ fun ControlScreen(
                     )
                 }
 
+                // Main control UI
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -101,6 +97,7 @@ fun ControlScreen(
                         busyButtons = busyButtons,
                         modifier = Modifier.weight(0.2f)
                     )
+
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -127,6 +124,7 @@ fun ControlScreen(
                                 modifier = Modifier.weight(0.3f)
                             )
                         }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -145,6 +143,7 @@ fun ControlScreen(
                             )
                         }
                     }
+
                     RightControlPanel(
                         isAuto = isAuto,
                         data = data,
@@ -157,60 +156,162 @@ fun ControlScreen(
                         modifier = Modifier.weight(0.2f)
                     )
                 }
+
+                // Performance overlay only in debug
+                val isInPreview = LocalInspectionMode.current
+                if (BuildConfig.DEBUG && !isInPreview) {
+                    PerformanceOverlay(modifier = Modifier.padding(16.dp))
+                }
             }
 
-            // Performance overlay only in debug
-            val isInPreview = LocalInspectionMode.current
-            if (BuildConfig.DEBUG && !isInPreview) {
-                PerformanceOverlay(modifier = Modifier.padding(16.dp))
+            // Connection lost notification - shows on top of UI when connection is lost
+            if (uiState.errorMessage?.contains("Connection lost") == true) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .align(Alignment.TopCenter)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Connection to PLC lost",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            TextButton(
+                                onClick = onRetryConnection,
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Connection/Loading overlay based on loadingPercent
+        // Overlay states - Always on top
         when (loadingPercent) {
             -1 -> {
-                // Connection failed/timeout
-                ConnectionOverlay(
-                    message = uiState.errorMessage ?: "Unable to connect to PLC",
-                    showProgress = false,
-                    showRetry = true,
-                    onRetry = onRetryConnection
-                )
-            }
-
-            0 -> {
-                // Connecting
-                ConnectionOverlay(
-                    message = "Connecting to PLC...",
-                    showProgress = true,
-                    showRetry = false
-                )
-            }
-
-            in 1..99 -> {
-                // Loading nodes
+                // Connection failed - Full screen blocking overlay
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .pointerInput(Unit) { awaitEachGesture { } },
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    // Consume all events
+                                    event.changes.forEach { it.consume() }
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .wrapContentHeight()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = uiState.errorMessage ?: "Unable to connect to PLC",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+
+                            Button(onClick = onRetryConnection) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
+            }
+
+            0 -> {
+                // Connecting - Full screen blocking overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    event.changes.forEach { it.consume() }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                         CircularProgressIndicator(
-                            progress = loadingPercent / 100f,
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(64.dp),
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Loading data... $loadingPercent%",
-                            color = Color.White
+                            text = "Connecting to PLC...",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     }
                 }
             }
 
-            // 100 -> UI đã hiển thị ở trên
+            in 1..99 -> {
+                // Loading nodes - Full screen blocking overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    event.changes.forEach { it.consume() }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            progress = loadingPercent / 100f,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Text(
+                            text = "Loading data... $loadingPercent%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
         }
     }
 }
