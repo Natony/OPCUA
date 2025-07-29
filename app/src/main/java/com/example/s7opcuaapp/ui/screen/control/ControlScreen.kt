@@ -1,27 +1,15 @@
 package com.example.s7opcuaapp.ui.screen.control
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.unit.dp
-import com.example.s7opcuaapp.ui.components.NumberInputDialog
-import com.example.s7opcuaapp.ui.components.PerformanceOverlay
-import com.example.s7opcuaapp.ui.components.SingleTouchHandler
-import com.example.s7opcuaapp.BuildConfig
-import androidx.compose.ui.platform.LocalInspectionMode
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.delay
 import android.util.Log
-
+import com.example.s7opcuaapp.ui.components.MainControlContent
+import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
+import com.example.s7opcuaapp.ui.components.TimeoutDialog
 @Composable
 fun ControlScreen(
     uiState: ControlUiState,
@@ -40,10 +28,6 @@ fun ControlScreen(
 ) {
     val data = uiState.plcData
     var isAuto by remember { mutableStateOf(true) }
-    val lockedButtons = uiState.lockedButtons
-    val busyButtons = uiState.busyButtons
-    val isProcessing = uiState.isProcessing
-    val loadingPercent = uiState.loadingPercent
 
     // Connection timeout dialog state
     var showTimeoutDialog by remember { mutableStateOf(false) }
@@ -52,8 +36,9 @@ fun ControlScreen(
     // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
         when (connectionState) {
-            is ControlViewModel.ConnectionState.Timeout -> {
-                Log.d("ControlScreen", "Connection timeout detected")
+            is ControlViewModel.ConnectionState.Timeout,
+            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> {
+                Log.d("ControlScreen", "Connection timeout/max retries detected")
                 showTimeoutDialog = true
                 timeoutCountdown = 10
 
@@ -93,10 +78,12 @@ fun ControlScreen(
     }
 
     // Safety mechanism for stuck loading
-    LaunchedEffect(connectionState, loadingPercent) {
-        if (connectionState is ControlViewModel.ConnectionState.Connecting && loadingPercent in 1..99) {
+    LaunchedEffect(connectionState, uiState.loadingPercent) {
+        if (connectionState is ControlViewModel.ConnectionState.Connecting &&
+            uiState.loadingPercent in 1..99) {
             delay(30000) // 30 seconds timeout
-            if (connectionState is ControlViewModel.ConnectionState.Connecting && loadingPercent in 1..99) {
+            if (connectionState is ControlViewModel.ConnectionState.Connecting &&
+                uiState.loadingPercent in 1..99) {
                 Log.e("ControlScreen", "Loading stuck after 30 seconds")
                 showTimeoutDialog = true
             }
@@ -106,290 +93,46 @@ fun ControlScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         // Main UI - Show when connected and data loaded
         val showMainUI = connectionState is ControlViewModel.ConnectionState.Connected &&
-                (loadingPercent == 100 || loadingPercent == 0) // 0 for restart case
+                (uiState.loadingPercent == 100 || uiState.loadingPercent == 0) // 0 for restart case
 
         if (showMainUI) {
-            SingleTouchHandler(modifier = Modifier.fillMaxSize()) {
-                // Dialog
-                uiState.openDialogForIndex?.let { idx ->
-                    NumberInputDialog(
-                        title = uiState.dialogTitle.ifBlank { "Nhập giá trị" },
-                        initialValue = data.ints.getOrNull(idx)?.toString() ?: "0",
-                        onConfirm = { value -> onConfirmNumber(idx, value) },
-                        onDismiss = onDismissDialog
-                    )
-                }
-
-                // Main control panels
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                ) {
-                    LeftControlPanel(
-                        isAuto = isAuto,
-                        data = data,
-                        onToggleBoolean = onToggleBoolean,
-                        onOpenDialog = onOpenDialog,
-                        onPressButton = onPressButton,
-                        onReleaseButton = onReleaseButton,
-                        lockedButtons = lockedButtons,
-                        busyButtons = busyButtons,
-                        modifier = Modifier.weight(0.2f)
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(0.6f)
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .padding(2.dp)
-                        ) {
-                            CenterPanel(
-                                uiState = uiState,
-                                isAuto = isAuto,
-                                onToggleBoolean = onToggleBoolean,
-                                onFunctionSelect = onFunctionSelect,
-                                onTextChange = onTextChange,
-                                onSendAll = onSendAll,
-                                modifier = Modifier.weight(0.3f)
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .padding(2.dp)
-                        ) {
-                            BottomControlsRow(
-                                isAuto = isAuto,
-                                data = data,
-                                onToggleBoolean = onToggleBoolean,
-                                onToggleAutoMode = { isAuto = !isAuto },
-                                modifier = Modifier.weight(0.7f),
-                                lockedButtons = lockedButtons,
-                                busyButtons = busyButtons,
-                                isProcessing = isProcessing
-                            )
-                        }
-                    }
-
-                    RightControlPanel(
-                        isAuto = isAuto,
-                        data = data,
-                        onToggleBoolean = onToggleBoolean,
-                        onOpenDialog = onOpenDialog,
-                        onPressButton = onPressButton,
-                        onReleaseButton = onReleaseButton,
-                        lockedButtons = lockedButtons,
-                        busyButtons = busyButtons,
-                        modifier = Modifier.weight(0.2f)
-                    )
-                }
-
-                // Performance overlay in debug
-                val isInPreview = LocalInspectionMode.current
-                if (BuildConfig.DEBUG && !isInPreview) {
-                    PerformanceOverlay(modifier = Modifier.padding(16.dp))
-                }
-            }
-
-            // Connection lost notification - non-blocking
-            if (uiState.errorMessage?.contains("Connection lost") == true) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .align(Alignment.TopCenter)
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        ),
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Connection to PLC lost",
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            TextButton(
-                                onClick = onRetryConnection,
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            ) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-                }
-            }
+            MainControlContent(
+                uiState = uiState,
+                isAuto = isAuto,
+                onToggleAutoMode = { isAuto = !isAuto },
+                onToggleBoolean = onToggleBoolean,
+                onOpenDialog = onOpenDialog,
+                onConfirmNumber = onConfirmNumber,
+                onDismissDialog = onDismissDialog,
+                onFunctionSelect = onFunctionSelect,
+                onTextChange = onTextChange,
+                onSendAll = onSendAll,
+                onPressButton = onPressButton,
+                onReleaseButton = onReleaseButton,
+                onRetryConnection = onRetryConnection
+            )
         }
 
-        // Overlay states based on connection state
-        when (connectionState) {
-            is ControlViewModel.ConnectionState.Idle -> {
-                // No overlay for idle state
-            }
-
-            is ControlViewModel.ConnectionState.Connecting -> {
-                FullScreenOverlay {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(64.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Connecting to PLC...",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        if (loadingPercent > 0) {
-                            Text(
-                                text = "Loading: $loadingPercent%",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
-            }
-
-            is ControlViewModel.ConnectionState.Connected -> {
-                // Show loading overlay only if actively loading
-                if (loadingPercent in 1..99) {
-                    FullScreenOverlay {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                progress = loadingPercent / 100f,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Text(
-                                text = "Loading data... $loadingPercent%",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-                }
-            }
-
-            is ControlViewModel.ConnectionState.Failed -> {
-                // Only show full overlay for critical errors
-                if (!connectionState.error.contains("Connection lost")) {
-                    FullScreenOverlay {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth(0.8f)
-                                .wrapContentHeight()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Text(
-                                    text = connectionState.error,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Button(onClick = onRetryConnection) {
-                                    Text("Retry")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            is ControlViewModel.ConnectionState.Timeout -> {
-                // Timeout handled by LaunchedEffect above
-            }
-        }
+        // Connection state overlays
+        ConnectionStateOverlay(
+            connectionState = connectionState,
+            loadingPercent = uiState.loadingPercent,
+            onRetryConnection = onRetryConnection
+        )
 
         // Timeout dialog
         if (showTimeoutDialog) {
-            AlertDialog(
-                onDismissRequest = { /* Can't dismiss */ },
-                title = { Text("Connection Timeout") },
-                text = {
-                    Column {
-                        Text("Unable to connect to PLC.")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Returning to config in $timeoutCountdown seconds...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+            TimeoutDialog(
+                timeoutCountdown = timeoutCountdown,
+                onRetryConnection = {
+                    showTimeoutDialog = false
+                    onRetryConnection()
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showTimeoutDialog = false
-                            onRetryConnection()
-                        }
-                    ) {
-                        Text("Retry Connection")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            showTimeoutDialog = false
-                            onNavigateToConfig()
-                        }
-                    ) {
-                        Text("Go to Config")
-                    }
+                onNavigateToConfig = {
+                    showTimeoutDialog = false
+                    onNavigateToConfig()
                 }
             )
         }
     }
-}
-
-// Helper composable for full screen overlays
-@Composable
-private fun FullScreenOverlay(
-    content: @Composable BoxScope.() -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.8f))
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        event.changes.forEach { it.consume() }
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center,
-        content = content
-    )
 }

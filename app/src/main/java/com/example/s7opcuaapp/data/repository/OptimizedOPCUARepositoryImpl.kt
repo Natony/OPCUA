@@ -303,6 +303,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         }
     }
 
+
     /**
      * Subscribe with grouped sampling intervals
      */
@@ -470,6 +471,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             }
         }
     }
+
 
     /**
      * Update device configuration

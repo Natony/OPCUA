@@ -77,6 +77,32 @@ fun MainNavGraph(rootNavController: NavHostController) {
         }
     }
 
+    // Handle connection state changes globally
+    LaunchedEffect(connectionState) {
+        val currentConnectionState = connectionState // Capture for smart cast
+        when (currentConnectionState) {
+            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> {
+                Log.e("MainNavGraph", "Max retries exceeded: ${currentConnectionState.reason}")
+                // Could show a global error dialog or navigate to config
+                if (currentRoute == "control") {
+                    delay(2000) // Give user time to see the error
+                    topNavController.navigate("config_btm")
+                }
+            }
+            is ControlViewModel.ConnectionState.Timeout -> {
+                Log.e("MainNavGraph", "Connection timeout")
+                // Let ControlScreen handle timeout navigation
+            }
+            is ControlViewModel.ConnectionState.Failed -> {
+                Log.e("MainNavGraph", "Connection failed: ${currentConnectionState.error}")
+                // Let ControlScreen handle failures
+            }
+            else -> {
+                // Other states handled by respective screens
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopNavigationBar(
@@ -101,16 +127,6 @@ fun MainNavGraph(rootNavController: NavHostController) {
             modifier = Modifier.padding(paddingValues)
         ) {
             composable("control") {
-                val controlUiState by controlViewModel.uiState.collectAsStateWithLifecycle()
-
-//                LaunchedEffect(Unit) {
-//                    currentDevice.value = prefsManager.getCurrentDevice()
-//                    // Start connection when entering control screen
-//                    if (connectionState == ControlViewModel.ConnectionState.Idle) {
-//                        controlViewModel.startConnection()
-//                    }
-//                }
-
                 ControlScreen(
                     uiState = controlUiState,
                     connectionState = connectionState,
@@ -118,7 +134,8 @@ fun MainNavGraph(rootNavController: NavHostController) {
                         topNavController.navigate("config_btm")
                     },
                     onRetryConnection = {
-                        // Retry connection
+                        // Reset connection attempts and retry
+                        controlViewModel.resetConnectionAttempts()
                         controlViewModel.resetConnection()
                     },
                     onToggleBoolean = { idx, newVal ->
@@ -215,8 +232,9 @@ fun MainNavGraph(rootNavController: NavHostController) {
                                 // Wait longer for complete cleanup
                                 delay(2000)
 
-                                // Reset connection state
+                                // Reset connection state and attempts
                                 Log.d("MainNavGraph", "Resetting states...")
+                                controlViewModel.resetConnectionAttempts()
 
                                 // Set flag to reconnect
                                 shouldReconnect = true

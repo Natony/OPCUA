@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,11 +52,31 @@ fun TopNavigationBar(
             is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50) // Green
             is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFC107) // Amber
             is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336) // Red
+            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Color(0xFF9C27B0) // Purple
             is ControlViewModel.ConnectionState.Timeout -> Color(0xFFFF5722) // Deep Orange
+            is ControlViewModel.ConnectionState.Offline -> Color(0xFF607D8B) // Blue Grey
             else -> Color(0xFF9E9E9E) // Gray
         },
         animationSpec = tween(300)
     )
+
+    val connectionText = when (connectionState) {
+        is ControlViewModel.ConnectionState.Connected -> "Connected"
+        is ControlViewModel.ConnectionState.Connecting -> "Connecting... (${connectionState.attempt}/3)"
+        is ControlViewModel.ConnectionState.Failed -> "Failed (${connectionState.attempt}/3)"
+        is ControlViewModel.ConnectionState.MaxRetriesExceeded -> "Connection Failed"
+        is ControlViewModel.ConnectionState.Timeout -> "Timeout"
+        is ControlViewModel.ConnectionState.Offline -> "Offline Mode"
+        else -> "Disconnected"
+    }
+
+    val connectionIcon = when (connectionState) {
+        is ControlViewModel.ConnectionState.Connected -> Icons.Default.Wifi
+        is ControlViewModel.ConnectionState.Offline -> Icons.Default.WifiOff
+        is ControlViewModel.ConnectionState.Failed,
+        is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Icons.Default.ErrorOutline
+        else -> Icons.Default.WifiOff
+    }
 
     // Blinking animation for connecting state
     val infiniteTransition = rememberInfiniteTransition()
@@ -80,7 +101,18 @@ fun TopNavigationBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(24.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(
+                        when (connectionState) {
+                            is ControlViewModel.ConnectionState.Connected ->
+                                MaterialTheme.colorScheme.surfaceVariant
+                            is ControlViewModel.ConnectionState.Offline ->
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                            is ControlViewModel.ConnectionState.Failed,
+                            is ControlViewModel.ConnectionState.MaxRetriesExceeded ->
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Device name
@@ -114,10 +146,7 @@ fun TopNavigationBar(
                     horizontalArrangement = Arrangement.End
                 ) {
                     Icon(
-                        imageVector = when (connectionState) {
-                            is ControlViewModel.ConnectionState.Connected -> Icons.Default.Wifi
-                            else -> Icons.Default.WifiOff
-                        },
+                        imageVector = connectionIcon,
                         contentDescription = "Connection",
                         modifier = Modifier.size(16.dp),
                         tint = if (connectionState is ControlViewModel.ConnectionState.Connecting) {
@@ -128,16 +157,12 @@ fun TopNavigationBar(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = when (connectionState) {
-                            is ControlViewModel.ConnectionState.Connected -> "Connected"
-                            is ControlViewModel.ConnectionState.Connecting -> "Connecting..."
-                            is ControlViewModel.ConnectionState.Failed -> "Failed"
-                            is ControlViewModel.ConnectionState.Timeout -> "Timeout"
-                            else -> "Disconnected"
-                        },
+                        text = connectionText,
                         style = MaterialTheme.typography.labelSmall,
                         color = connectionColor,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

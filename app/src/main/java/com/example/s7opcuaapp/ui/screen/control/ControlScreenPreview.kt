@@ -1,9 +1,9 @@
+package com.example.s7opcuaapp.ui.screen.control
+
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.Composable
 import com.example.s7opcuaapp.data.model.PlcData
-import com.example.s7opcuaapp.ui.screen.control.ControlScreen
-import com.example.s7opcuaapp.ui.screen.control.ControlUiState
-import com.example.s7opcuaapp.viewmodel.ControlViewModel.ConnectionState.Connected
+import com.example.s7opcuaapp.viewmodel.ControlViewModel
 
 @Preview(showBackground = true, widthDp = 1080, heightDp = 720)
 @Composable
@@ -13,6 +13,7 @@ fun ControlScreenPreview() {
         bools = List(15) { it % 2 == 0 },
         ints = List(31) { it }
     )
+
     val sampleState = ControlUiState(
         plcData = samplePlcData,
         isWriting = false,
@@ -25,21 +26,111 @@ fun ControlScreenPreview() {
             5 to "40",
             6 to "50",
             7 to "60"
-        )
+        ),
+        loadingPercent = 100, // Fully loaded for preview
+        lockedButtons = emptySet(),
+        busyButtons = emptySet(),
+        isProcessing = false,
+        errorMessage = null
     )
-//    ControlScreen(
-//        uiState = sampleState,
-//        connectionState = connec,
-//        onNavigateToConfig = {false},
-//        onRetryConnection = {},
-//        onToggleBoolean = { _, _ -> },
-//        onOpenDialog = { _, _ -> },
-//        onConfirmNumber = { _, _ -> },
-//        onDismissDialog = {},
-//        onFunctionSelect = {},
-//        onTextChange = { _, _ -> },
-//        onSendAll = {},
-//        onPressButton = { _ -> false },
-//        onReleaseButton = { _ -> false }
-//    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Connected,
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false }
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 720)
+@Composable
+fun ControlScreenConnectingPreview() {
+    val sampleState = ControlUiState(
+        plcData = PlcData.empty(),
+        loadingPercent = 45 // Loading in progress
+    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Connecting(attempt = 2),
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false }
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 720)
+@Composable
+fun ControlScreenFailedPreview() {
+    val sampleState = ControlUiState(
+        plcData = PlcData.empty(),
+        errorMessage = "Connection to PLC failed"
+    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Failed(
+            error = "Connection timeout",
+            attempt = 3
+        ),
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false }
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 720)
+@Composable
+fun ControlScreenOfflinePreview() {
+    val samplePlcData = PlcData(
+        bools = List(15) { false },
+        ints = List(31) { 0 }
+    )
+
+    val sampleState = ControlUiState(
+        plcData = samplePlcData,
+        errorMessage = "Working offline",
+        lockedButtons = (0..14).toSet() // All buttons locked in offline mode
+    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Offline,
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false }
+    )
 }
