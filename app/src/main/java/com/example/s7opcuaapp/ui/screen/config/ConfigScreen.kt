@@ -8,25 +8,23 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.viewmodel.ConfigUiState
+import com.example.s7opcuaapp.viewmodel.ControlViewModel
 
 @Composable
 fun ConfigScreen(
     uiState: ConfigUiState,
+    connectionState: ControlViewModel.ConnectionState? = null,
     onNewDeviceNameChanged: (String) -> Unit,
     onNewDeviceIpChanged: (String) -> Unit,
     onNewDevicePortChanged: (String) -> Unit,
@@ -44,6 +42,55 @@ fun ConfigScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+
+        // Connection Status Card (if provided)
+        connectionState?.let { state ->
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (state) {
+                            is ControlViewModel.ConnectionState.Connected -> Color(0xFFE8F5E9)
+                            is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFF9C4)
+                            is ControlViewModel.ConnectionState.Failed -> Color(0xFFFFEBEE)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = when (state) {
+                                is ControlViewModel.ConnectionState.Connected -> Icons.Default.CheckCircle
+                                is ControlViewModel.ConnectionState.Failed -> Icons.Default.Error
+                                else -> Icons.Default.Info
+                            },
+                            contentDescription = null,
+                            tint = when (state) {
+                                is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50)
+                                is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when (state) {
+                                is ControlViewModel.ConnectionState.Connected -> "Connected to PLC"
+                                is ControlViewModel.ConnectionState.Connecting -> "Connecting..."
+                                is ControlViewModel.ConnectionState.Failed -> "Connection failed: ${state.error}"
+                                is ControlViewModel.ConnectionState.Timeout -> "Connection timeout"
+                                else -> "Not connected"
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
         // Header
         item {
             Text(

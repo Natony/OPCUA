@@ -1,25 +1,34 @@
 package com.example.s7opcuaapp.ui.navigation
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.ui.screen.config.ConfigScreen
 import com.example.s7opcuaapp.ui.screen.control.ControlScreen
 import com.example.s7opcuaapp.ui.screen.home.HomeScreen
 import com.example.s7opcuaapp.ui.screen.history.LoginHistoryScreen
 import com.example.s7opcuaapp.ui.screen.usermanager.UserManagerScreen
 import com.example.s7opcuaapp.viewmodel.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,6 +41,41 @@ fun MainNavGraph(rootNavController: NavHostController) {
     val controlViewModel: ControlViewModel = hiltViewModel()
     val controlUiState by controlViewModel.uiState.collectAsStateWithLifecycle()
     val logoutViewModel: LogoutViewModel = hiltViewModel()
+    val connectionState by controlViewModel.connectionState.collectAsStateWithLifecycle()
+
+    // Get PrefsManager directly
+    val context = LocalContext.current
+    val prefsManager = remember { PrefsManager(context) }
+    val currentDevice = remember { mutableStateOf(prefsManager.getCurrentDevice()) }
+
+    // Add coroutine scope for proper async handling
+    val coroutineScope = rememberCoroutineScope()
+
+    var shouldReconnect by remember { mutableStateOf(false) }
+
+    // Monitor navigation and connection state
+    LaunchedEffect(currentRoute) {
+        Log.d("MainNavGraph", "Route changed to: $currentRoute")
+
+        when (currentRoute) {
+            "control" -> {
+                // Update current device
+                currentDevice.value = prefsManager.getCurrentDevice()
+
+                // Start connection if needed
+                if (shouldReconnect || connectionState == ControlViewModel.ConnectionState.Idle) {
+                    Log.d("MainNavGraph", "Starting connection on control screen")
+                    shouldReconnect = false
+                    controlViewModel.startConnection()
+                }
+            }
+            "config_btm" -> {
+                // Don't stop connection when going to config
+                // Just update UI to show current connection state
+                Log.d("MainNavGraph", "Entered config, connection state: $connectionState")
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -39,6 +83,8 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 navController = topNavController,
                 statusValue = controlUiState.plcData.ints.getOrNull(0) ?: 0,
                 batteryLevel = controlUiState.plcData.ints.getOrNull(1) ?: 100,
+                deviceName = currentDevice.value?.name ?: "No Device",
+                connectionState = connectionState,
                 onLogout = {
                     logoutViewModel.logout {
                         rootNavController.navigate("login") {
@@ -55,21 +101,21 @@ fun MainNavGraph(rootNavController: NavHostController) {
             modifier = Modifier.padding(paddingValues)
         ) {
             composable("control") {
-
                 val controlUiState by controlViewModel.uiState.collectAsStateWithLifecycle()
-                val connectionState by controlViewModel.connectionState.collectAsStateWithLifecycle()
-                DisposableEffect(Unit) {
-                    controlViewModel.startConnection()
-                    onDispose { /* keep connection until leaving MainNavGraph */ }
-                }
+
+//                LaunchedEffect(Unit) {
+//                    currentDevice.value = prefsManager.getCurrentDevice()
+//                    // Start connection when entering control screen
+//                    if (connectionState == ControlViewModel.ConnectionState.Idle) {
+//                        controlViewModel.startConnection()
+//                    }
+//                }
 
                 ControlScreen(
                     uiState = controlUiState,
+                    connectionState = connectionState,
                     onNavigateToConfig = {
-                        // Navigate to config when timeout
-                        topNavController.navigate("config_btm") {
-                            popUpTo("control") { inclusive = true }
-                        }
+                        topNavController.navigate("config_btm")
                     },
                     onRetryConnection = {
                         // Retry connection
@@ -133,8 +179,10 @@ fun MainNavGraph(rootNavController: NavHostController) {
             composable("config_btm") {
                 val configViewModel: ConfigViewModel = hiltViewModel()
                 val uiState by configViewModel.uiState.collectAsStateWithLifecycle()
+
                 ConfigScreen(
                     uiState = uiState,
+                    connectionState = connectionState,
                     onNewDeviceNameChanged = { deviceName ->
                         configViewModel.onNewDeviceNameChanged(deviceName)
                     },
@@ -152,20 +200,32 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     },
                     onAddDevice = { configViewModel.onAddDevice() },
                     onRemoveDevice = { device -> configViewModel.onRemoveDevice(device) },
-
                     onSelectDevice = { device ->
                         configViewModel.onSelectDevice(device) {
-                            // Stop current connection first
-                            controlViewModel.stopConnection()
-                            // Wait a bit for cleanup
-                            kotlinx.coroutines.GlobalScope.launch {
-                                kotlinx.coroutines.delay(1000)
-                                // Then restart with new device
-                                controlViewModel.restartConnection()
-                            }
-                            // Navigate back to control
-                            topNavController.navigate("control") {
-                                popUpTo("control") { inclusive = true }
+                            coroutineScope.launch {
+                                Log.d("MainNavGraph", "Device selected: ${device.name}")
+
+                                // Update current device
+                                currentDevice.value = device
+
+                                // Stop current connection completely
+                                Log.d("MainNavGraph", "Stopping current connection...")
+                                controlViewModel.stopConnection()
+
+                                // Wait longer for complete cleanup
+                                delay(2000)
+
+                                // Reset connection state
+                                Log.d("MainNavGraph", "Resetting states...")
+
+                                // Set flag to reconnect
+                                shouldReconnect = true
+
+                                // Navigate to control
+                                Log.d("MainNavGraph", "Navigating to control screen...")
+                                topNavController.navigate("control") {
+                                    popUpTo("control") { inclusive = true }
+                                }
                             }
                         }
                     },
@@ -173,7 +233,6 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onCancelEdit = { configViewModel.onCancelEdit() }
                 )
             }
-
         }
     }
 

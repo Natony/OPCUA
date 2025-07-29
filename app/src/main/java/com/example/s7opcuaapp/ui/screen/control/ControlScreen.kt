@@ -18,13 +18,14 @@ import com.example.s7opcuaapp.ui.components.PerformanceOverlay
 import com.example.s7opcuaapp.ui.components.SingleTouchHandler
 import com.example.s7opcuaapp.BuildConfig
 import androidx.compose.ui.platform.LocalInspectionMode
-import com.example.s7opcuaapp.ui.components.ConnectionOverlay
+import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.delay
 import android.util.Log
 
 @Composable
 fun ControlScreen(
     uiState: ControlUiState,
+    connectionState: ControlViewModel.ConnectionState,
     onNavigateToConfig: () -> Unit,
     onRetryConnection: () -> Unit,
     onToggleBoolean: (Int, Boolean) -> Unit,
@@ -44,31 +45,70 @@ fun ControlScreen(
     val isProcessing = uiState.isProcessing
     val loadingPercent = uiState.loadingPercent
 
-    // Handle connection timeout/error
-    LaunchedEffect(loadingPercent) {
-        Log.d("ControlScreen", "Loading percent changed: $loadingPercent")
-        if (loadingPercent == -1) {
-            Log.e("ControlScreen", "Connection failed, navigating to config in 1 second...")
-            delay(1000)
-            Log.d("ControlScreen", "Navigating to config now")
-            onNavigateToConfig()
+    // Connection timeout dialog state
+    var showTimeoutDialog by remember { mutableStateOf(false) }
+    var timeoutCountdown by remember { mutableStateOf(10) }
+
+    // Monitor connection state for timeout handling
+    LaunchedEffect(connectionState) {
+        when (connectionState) {
+            is ControlViewModel.ConnectionState.Timeout -> {
+                Log.d("ControlScreen", "Connection timeout detected")
+                showTimeoutDialog = true
+                timeoutCountdown = 10
+
+                // Start countdown
+                while (timeoutCountdown > 0 && showTimeoutDialog) {
+                    delay(1000)
+                    timeoutCountdown--
+                }
+
+                // Navigate to config after countdown
+                if (showTimeoutDialog) {
+                    onNavigateToConfig()
+                }
+            }
+            is ControlViewModel.ConnectionState.Failed -> {
+                // For critical failures, show timeout dialog
+                if (connectionState.error.contains("timeout", ignoreCase = true) ||
+                    connectionState.error.contains("max failures", ignoreCase = true)) {
+                    showTimeoutDialog = true
+                    timeoutCountdown = 10
+
+                    while (timeoutCountdown > 0 && showTimeoutDialog) {
+                        delay(1000)
+                        timeoutCountdown--
+                    }
+
+                    if (showTimeoutDialog) {
+                        onNavigateToConfig()
+                    }
+                }
+            }
+            else -> {
+                // Clear timeout dialog for other states
+                showTimeoutDialog = false
+            }
         }
     }
 
-    // Safety mechanism: If stuck in loading for too long
-    LaunchedEffect(loadingPercent) {
-        if (loadingPercent in 1..99) {
+    // Safety mechanism for stuck loading
+    LaunchedEffect(connectionState, loadingPercent) {
+        if (connectionState is ControlViewModel.ConnectionState.Connecting && loadingPercent in 1..99) {
             delay(30000) // 30 seconds timeout
-            if (uiState.loadingPercent in 1..99) {
-                Log.e("ControlScreen", "Loading timeout after 30 seconds")
-                onNavigateToConfig()
+            if (connectionState is ControlViewModel.ConnectionState.Connecting && loadingPercent in 1..99) {
+                Log.e("ControlScreen", "Loading stuck after 30 seconds")
+                showTimeoutDialog = true
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Main UI - ONLY show when fully connected
-        if (loadingPercent == 100) {
+        // Main UI - Show when connected and data loaded
+        val showMainUI = connectionState is ControlViewModel.ConnectionState.Connected &&
+                (loadingPercent == 100 || loadingPercent == 0) // 0 for restart case
+
+        if (showMainUI) {
             SingleTouchHandler(modifier = Modifier.fillMaxSize()) {
                 // Dialog
                 uiState.openDialogForIndex?.let { idx ->
@@ -80,7 +120,7 @@ fun ControlScreen(
                     )
                 }
 
-                // Main control UI
+                // Main control panels
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -157,14 +197,14 @@ fun ControlScreen(
                     )
                 }
 
-                // Performance overlay only in debug
+                // Performance overlay in debug
                 val isInPreview = LocalInspectionMode.current
                 if (BuildConfig.DEBUG && !isInPreview) {
                     PerformanceOverlay(modifier = Modifier.padding(16.dp))
                 }
             }
 
-            // Connection lost notification - shows on top of UI when connection is lost
+            // Connection lost notification - non-blocking
             if (uiState.errorMessage?.contains("Connection lost") == true) {
                 Box(
                     modifier = Modifier
@@ -204,65 +244,14 @@ fun ControlScreen(
             }
         }
 
-        // Overlay states - Always on top
-        when (loadingPercent) {
-            -1 -> {
-                // Connection failed - Full screen blocking overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.8f))
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    // Consume all events
-                                    event.changes.forEach { it.consume() }
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .wrapContentHeight()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text(
-                                text = uiState.errorMessage ?: "Unable to connect to PLC",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.error
-                            )
-
-                            Button(onClick = onRetryConnection) {
-                                Text("Retry")
-                            }
-                        }
-                    }
-                }
+        // Overlay states based on connection state
+        when (connectionState) {
+            is ControlViewModel.ConnectionState.Idle -> {
+                // No overlay for idle state
             }
 
-            0 -> {
-                // Connecting - Full screen blocking overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.8f))
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    event.changes.forEach { it.consume() }
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
+            is ControlViewModel.ConnectionState.Connecting -> {
+                FullScreenOverlay {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -276,42 +265,131 @@ fun ControlScreen(
                             color = Color.White,
                             style = MaterialTheme.typography.bodyLarge
                         )
+                        if (loadingPercent > 0) {
+                            Text(
+                                text = "Loading: $loadingPercent%",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
 
-            in 1..99 -> {
-                // Loading nodes - Full screen blocking overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.8f))
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    event.changes.forEach { it.consume() }
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            progress = loadingPercent / 100f,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Text(
-                            text = "Loading data... $loadingPercent%",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+            is ControlViewModel.ConnectionState.Connected -> {
+                // Show loading overlay only if actively loading
+                if (loadingPercent in 1..99) {
+                    FullScreenOverlay {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                progress = loadingPercent / 100f,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Text(
+                                text = "Loading data... $loadingPercent%",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
                     }
                 }
             }
+
+            is ControlViewModel.ConnectionState.Failed -> {
+                // Only show full overlay for critical errors
+                if (!connectionState.error.contains("Connection lost")) {
+                    FullScreenOverlay {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .wrapContentHeight()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = connectionState.error,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Button(onClick = onRetryConnection) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            is ControlViewModel.ConnectionState.Timeout -> {
+                // Timeout handled by LaunchedEffect above
+            }
+        }
+
+        // Timeout dialog
+        if (showTimeoutDialog) {
+            AlertDialog(
+                onDismissRequest = { /* Can't dismiss */ },
+                title = { Text("Connection Timeout") },
+                text = {
+                    Column {
+                        Text("Unable to connect to PLC.")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Returning to config in $timeoutCountdown seconds...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showTimeoutDialog = false
+                            onRetryConnection()
+                        }
+                    ) {
+                        Text("Retry Connection")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showTimeoutDialog = false
+                            onNavigateToConfig()
+                        }
+                    ) {
+                        Text("Go to Config")
+                    }
+                }
+            )
         }
     }
+}
+
+// Helper composable for full screen overlays
+@Composable
+private fun FullScreenOverlay(
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.8f))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
 }

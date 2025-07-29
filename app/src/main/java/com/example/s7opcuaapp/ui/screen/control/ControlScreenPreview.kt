@@ -27,18 +27,19 @@ fun ControlScreenPreview() {
             7 to "60"
         )
     )
-    ControlScreen(
-        uiState = sampleState,
-        onNavigateToConfig = {false},
-        onRetryConnection = {},
-        onToggleBoolean = { _, _ -> },
-        onOpenDialog = { _, _ -> },
-        onConfirmNumber = { _, _ -> },
-        onDismissDialog = {},
-        onFunctionSelect = {},
-        onTextChange = { _, _ -> },
-        onSendAll = {},
-        onPressButton = { _ -> false },
-        onReleaseButton = { _ -> false }
-    )
+//    ControlScreen(
+//        uiState = sampleState,
+//        connectionState = connec,
+//        onNavigateToConfig = {false},
+//        onRetryConnection = {},
+//        onToggleBoolean = { _, _ -> },
+//        onOpenDialog = { _, _ -> },
+//        onConfirmNumber = { _, _ -> },
+//        onDismissDialog = {},
+//        onFunctionSelect = {},
+//        onTextChange = { _, _ -> },
+//        onSendAll = {},
+//        onPressButton = { _ -> false },
+//        onReleaseButton = { _ -> false }
+//    )
 }

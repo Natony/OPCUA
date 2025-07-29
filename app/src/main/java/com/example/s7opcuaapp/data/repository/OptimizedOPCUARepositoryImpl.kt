@@ -31,6 +31,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     companion object {
         @Volatile
         private var activeInstance: OptimizedOPCUARepositoryImpl? = null
+        private val instanceLock = Any()
     }
 
     // Use buffer's flow instead of creating our own
@@ -44,6 +45,10 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val isStarted = AtomicBoolean(false)
     private val isConnected = AtomicBoolean(false)
     private var connectionJob: Job? = null
+
+    fun isConnected(): Boolean {
+        return isConnected.get() && OPCUAClientManager.isConnected()
+    }
 
     // Connection parameters
     private var lastConnectionAttempt = 0L
@@ -64,8 +69,16 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
     init {
         // Cancel previous instance if exists
-        activeInstance?.stop()
-        activeInstance = this
+        synchronized(instanceLock) {
+            // Stop previous instance if exists
+            activeInstance?.let {
+                Log.d("OPCUARepo", "⚠️ Stopping previous instance")
+                runBlocking {
+                    it.forceStop()
+                }
+            }
+            activeInstance = this
+        }
     }
 
     // Subscription groups for optimized polling
@@ -93,8 +106,6 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      * Start connection with improved error handling
      */
     suspend fun start() = connectionMutex.withLock {
-        stopInternal()
-
         if (isStarted.get()) {
             Log.d("OPCUARepo", "⚠️ Repository already started")
             return@withLock
@@ -107,8 +118,14 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         loadingTracker.reset()
         dataBuffer.clear()
 
-        // Start connection loop
+        // Make sure no old connection job is running
         connectionJob?.cancel()
+        connectionJob = null
+
+        // Wait a bit for cleanup
+        delay(500)
+
+        // Start new connection loop
         connectionJob = repositoryScope.launch {
             startConnectionLoop()
         }
@@ -122,6 +139,37 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
         isStarted.set(false)
         isConnected.set(false)
+    }
+
+    private suspend fun forceStop() {
+        try {
+            Log.d("OPCUARepo", "🔴 Force stopping repository")
+
+            // Set flags first
+            isStarted.set(false)
+            isConnected.set(false)
+
+            // Cancel all jobs
+            connectionJob?.cancel()
+            connectionJob = null
+
+            // Disconnect OPC UA
+            try {
+                OPCUAClientManager.disconnect()
+            } catch (e: Exception) {
+                Log.w("OPCUARepo", "Error disconnecting OPC UA", e)
+            }
+
+            // Clear buffer
+            dataBuffer.clear()
+
+            // Reset loading tracker
+            loadingTracker.reset()
+
+            Log.d("OPCUARepo", "✅ Force stop completed")
+        } catch (e: Exception) {
+            Log.e("OPCUARepo", "Error in force stop", e)
+        }
     }
 
     /**
@@ -399,40 +447,26 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      * Stop repository
      */
     override fun stop() {
-        repositoryScope.launch {
-            connectionMutex.withLock {
-                if (!isStarted.get()) {
-                    return@withLock
-                }
+        Log.d("OPCUARepo", "🛑 Stop called")
 
-                runBlocking {
-                    connectionMutex.withLock {
-                        stopInternal()
+        runBlocking {
+            try {
+                // Use force stop for immediate cleanup
+                forceStop()
+
+                // Wait for cleanup
+                delay(1000)
+
+                // Clear active instance if it's this one
+                synchronized(instanceLock) {
+                    if (activeInstance == this@OptimizedOPCUARepositoryImpl) {
+                        activeInstance = null
                     }
                 }
 
-                if (activeInstance == this) {
-                    activeInstance = null
-                }
-
-                Log.d("OPCUARepo", "🛑 Stopping repository...")
-                isStarted.set(false)
-                isConnected.set(false)
-
-                // Cancel jobs
-                connectionJob?.cancel()
-
-                // Cleanup
-                try {
-                    OPCUAClientManager.disconnect()
-                } catch (e: Exception) {
-                    Log.e("OPCUARepo", "Error during stop", e)
-                }
-
-                // Clear buffer
-                dataBuffer.clear()
-
-                Log.d("OPCUARepo", "✅ Repository stopped")
+                Log.d("OPCUARepo", "✅ Repository stopped completely")
+            } catch (e: Exception) {
+                Log.e("OPCUARepo", "Error during stop", e)
             }
         }
     }
@@ -441,15 +475,12 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      * Update device configuration
      */
     override fun updateDevice(device: DeviceEntity) {
+        Log.d("OPCUARepo", "📱 Updating device: ${device.name}")
         this.device = device
 
-        // Restart connection if active
+        // Don't auto-restart here, let ViewModel handle it
         if (isStarted.get()) {
-            repositoryScope.launch {
-                stop()
-                delay(1000)
-                start()
-            }
+            Log.d("OPCUARepo", "Device updated while running - restart needed")
         }
     }
 

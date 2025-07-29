@@ -97,36 +97,58 @@ class ControlViewModel @Inject constructor(
                 }
         }
 
+        // Monitor connection health
+        viewModelScope.launch {
+            while (true) {
+                delay(5000) // Check every 5 seconds
+                if (connectionStarted && _uiState.value.loadingPercent == 100) {
+                    if (!repoImpl.isConnected()) {
+                        Log.w("ControlVM", "Connection lost detected")
+                        _uiState.update {
+                            it.copy(
+                                errorMessage = "Connection lost to PLC",
+                                loadingPercent = -1
+                            )
+                        }
+                        _connectionState.value = ConnectionState.Failed("Connection lost")
+                    }
+                }
+            }
+        }
+
         // Observe loading percent
         viewModelScope.launch {
             repoImpl.observeLoadingPercent()
                 .catch { err ->
                     Log.e("ControlVM", "Error observing loading percent", err)
-                    _uiState.update {
-                        it.copy(
-                            loadingPercent = -1,
-                            errorMessage = "Loading error: ${err.message}"
-                        )
-                    }
+                    // Don't set error state here, let connection state handle it
                 }
                 .collect { pct ->
                     Log.d("ControlVM", "Loading percent = $pct")
                     _uiState.update { it.copy(loadingPercent = pct) }
 
-                    // Handle error state
-                    if (pct == -1) {
-                        Log.e("ControlVM", "Connection failed detected from loading percent")
-                        connectionTimeoutManager.cancelTimeout()
-                        _connectionState.value = ConnectionState.Failed("Connection failed")
-                        connectionStarted = false
-
-                        // Cancel all ongoing operations
-                        releaseAllButtons()
-                        resetProcessingState()
-
-                        // Cancel data observation job
-                        dataObservationJob?.cancel()
-                        dataObservationJob = null
+                    // Update connection state based on loading progress
+                    when {
+                        pct == -1 -> {
+                            // Error state from repository
+                            Log.e("ControlVM", "Connection error detected from loading percent")
+                            if (_connectionState.value !is ConnectionState.Failed) {
+                                _connectionState.value = ConnectionState.Failed("Connection failed")
+                            }
+                        }
+                        pct == 100 -> {
+                            // Fully loaded
+                            if (_connectionState.value is ConnectionState.Connecting) {
+                                _connectionState.value = ConnectionState.Connected
+                            }
+                        }
+                        pct > 0 -> {
+                            // Loading in progress
+                            if (_connectionState.value !is ConnectionState.Connected &&
+                                _connectionState.value !is ConnectionState.Connecting) {
+                                _connectionState.value = ConnectionState.Connecting
+                            }
+                        }
                     }
                 }
         }
@@ -140,38 +162,46 @@ class ControlViewModel @Inject constructor(
                     return@withLock
                 }
 
-                dataObservationJob?.cancel()
-                connectionTimeoutManager.cancelTimeout()
-
-                connectionStarted = true
-                _connectionState.value = ConnectionState.Connecting
-
-                // Start timeout
-                connectionTimeoutManager.startTimeout(viewModelScope) {
-                    handleConnectionTimeout()
-                }
-
-                connectionStarted = true
                 Log.d("ControlVM", "🚀 Starting connection...")
 
                 try {
-                    prefsManager.getCurrentDevice()?.let { device ->
-                        repoImpl.updateDevice(device)
+                    // Get current device first
+                    val currentDevice = prefsManager.getCurrentDevice()
+                    if (currentDevice == null) {
+                        Log.e("ControlVM", "No device configured")
+                        _connectionState.value = ConnectionState.Failed("No device configured")
+                        return@withLock
                     }
 
-                    _uiState.update { it.copy(loadingPercent = 0, errorMessage = null) }
+                    // Set connecting state
+                    connectionStarted = true
+                    _connectionState.value = ConnectionState.Connecting
+
+                    // Reset UI state
+                    _uiState.update {
+                        it.copy(
+                            loadingPercent = 0,
+                            errorMessage = null
+                        )
+                    }
+
+                    // Update device and start
+                    repoImpl.updateDevice(currentDevice)
                     repoImpl.start()
+
+                    // Start data observation
                     startOptimizedDataObservation()
 
-                    connectionTimeoutManager.cancelTimeout()
-                    connectionTimeoutManager.resetRetry()
-                    _connectionState.value = ConnectionState.Connected
-
                 } catch (e: Exception) {
-                    handleConnectionError(e)
                     Log.e("ControlVM", "Failed to start connection", e)
-                    _uiState.update { it.copy(errorMessage = "Connection failed: ${e.message}") }
                     connectionStarted = false
+                    _connectionState.value = ConnectionState.Failed(e.message ?: "Unknown error")
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = "Connection failed: ${e.message}",
+                            loadingPercent = -1
+                        )
+                    }
                 }
             }
         }
@@ -218,7 +248,7 @@ class ControlViewModel @Inject constructor(
                 .catch { err ->
                     Log.e("ControlVM", "Data observation error", err)
 
-                    // Set error state with loadingPercent = -1
+                    // Set proper error state
                     _uiState.update {
                         it.copy(
                             loadingPercent = -1,
@@ -226,6 +256,7 @@ class ControlViewModel @Inject constructor(
                         )
                     }
 
+                    _connectionState.value = ConnectionState.Failed("Connection lost")
                     connectionStarted = false
                 }
                 .collect { data ->
@@ -237,8 +268,18 @@ class ControlViewModel @Inject constructor(
                 }
         }
     }
-
     private suspend fun updateUIWithPlcData(data: PlcData) {
+        // Check if we're still connected - now using the method correctly
+        if (!connectionStarted || !repoImpl.isConnected()) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Connection lost to PLC",
+                    loadingPercent = -1
+                )
+            }
+            return
+        }
+
         // Lấy active buttons từ PLC data
         val activeButtons = getActiveButtons(data)
 
@@ -317,25 +358,16 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch {
             Log.d("ControlVM", "🔄 Resetting connection...")
 
-            // Stop current connection
+            // Stop current connection (this will set state to Idle)
             stopConnection()
 
-            // Clear error state
-            _uiState.update {
-                it.copy(
-                    loadingPercent = 0,
-                    errorMessage = null
-                )
-            }
-
-            // Wait a bit
-            delay(1000)
+            // Wait a bit for cleanup
+            delay(1500)
 
             // Start new connection
             startConnection()
         }
     }
-
     /**
      * THREAD-SAFE: Release all buttons in a group except one
      */
@@ -745,21 +777,45 @@ class ControlViewModel @Inject constructor(
     fun stopConnection() {
         viewModelScope.launch {
             connectionMutex.withLock {
-                if (!connectionStarted) return@withLock
+                if (!connectionStarted) {
+                    Log.d("ControlVM", "⚠️ Connection not started, nothing to stop")
+                    return@withLock
+                }
 
                 Log.d("ControlVM", "🛑 Stopping connection...")
 
-                // Release all pressed buttons first
-                releaseAllButtons()
-
-                connectionStarted = false
-
                 try {
+                    // Release all pressed buttons first
+                    releaseAllButtons()
+
+                    // Cancel data observation
                     dataObservationJob?.cancel()
                     dataObservationJob = null
+
+                    // Mark as not started
+                    connectionStarted = false
+
+                    // Stop repository
+                    Log.d("ControlVM", "Stopping repository...")
                     repoImpl.stop()
+
+                    // Wait for repository to stop
+                    delay(1000)
+
+                    // Reset all states
+                    _connectionState.value = ConnectionState.Idle
                     currentProcessingButton = null
-                    _uiState.update { it.copy(loadingPercent = 0) }
+                    _uiState.update {
+                        it.copy(
+                            loadingPercent = 0,
+                            errorMessage = null,
+                            busyButtons = emptySet(),
+                            lockedButtons = emptySet()
+                        )
+                    }
+
+                    Log.d("ControlVM", "✅ Connection stopped successfully")
+
                 } catch (e: Exception) {
                     Log.e("ControlVM", "Error stopping connection", e)
                 }
