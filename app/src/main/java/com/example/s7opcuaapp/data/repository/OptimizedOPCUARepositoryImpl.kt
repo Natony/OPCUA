@@ -13,6 +13,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.eclipse.milo.opcua.stack.core.UaException
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
 import java.util.concurrent.atomic.AtomicBoolean
@@ -66,6 +67,8 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val loadingTracker = LoadingTracker<String>(totalNodes)
 
     private val _uiState = MutableStateFlow(ControlUiState())
+
+    private val connectionLostScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
         // Cancel previous instance if exists
@@ -152,6 +155,8 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             // Cancel all jobs
             connectionJob?.cancel()
             connectionJob = null
+
+            connectionLostScope.cancel()
 
             // Disconnect OPC UA
             try {
@@ -274,8 +279,15 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      */
     private suspend fun connectToServer(): Boolean {
         return try {
-            val startTime = System.currentTimeMillis()
+            // Set callback để nhận thông báo khi mất kết nối
+            OPCUAClientManager.setConnectionLostCallback {
+                connectionLostScope.launch {
+                    Log.e("OPCUARepo", "🔌 Connection lost detected via callback")
+                    handleConnectionLost()
+                }
+            }
 
+            val startTime = System.currentTimeMillis()
             val result = if (!device.opcUsername.isNullOrBlank()) {
                 OPCUAClientManager.connect(
                     ipAddress = device.ipAddress,
@@ -301,6 +313,13 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             Log.e("OPCUARepo", "❌ Connection error: ${e.message}")
             false
         }
+    }
+
+    // Add handleConnectionLost method
+    private fun handleConnectionLost() {
+        Log.w("OPCUARepo", "🔌 Handling connection lost")
+        isConnected.set(false)
+        loadingTracker.setError()
     }
 
 
@@ -408,6 +427,14 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e("OPCUARepo", "❌ WriteBoolean failed", e)
+
+            // Check if connection lost
+            if (e.message?.contains("connection", ignoreCase = true) == true ||
+                e.message?.contains("timeout", ignoreCase = true) == true ||
+                e.message?.contains("Bad_NotConnected", ignoreCase = true) == true) {
+                handleConnectionLost()
+            }
+
             throw e
         }
     }
@@ -440,6 +467,14 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e("OPCUARepo", "❌ WriteInt failed", e)
+
+            // Check if connection lost
+            if (e.message?.contains("connection", ignoreCase = true) == true ||
+                e.message?.contains("timeout", ignoreCase = true) == true ||
+                e.message?.contains("Bad_NotConnected", ignoreCase = true) == true) {
+                handleConnectionLost()
+            }
+
             throw e
         }
     }

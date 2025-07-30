@@ -149,6 +149,7 @@ class ControlViewModel @Inject constructor(
                             if (_connectionState.value !is ConnectionState.Failed) {
                                 _connectionState.value = ConnectionState.Failed("Connection failed", connectionAttempts)
                             }
+
                         }
                         pct == 100 -> {
                             // Fully loaded
@@ -165,7 +166,7 @@ class ControlViewModel @Inject constructor(
                         }
                     }
                 }
-        }
+            }
     }
 
     fun startConnection() {
@@ -231,7 +232,6 @@ class ControlViewModel @Inject constructor(
                                     }
                                     percent == -1 -> {
                                         // Error from repository
-                                        throw Exception("Repository connection error")
                                     }
                                 }
                             }
@@ -349,11 +349,11 @@ class ControlViewModel @Inject constructor(
 
         _connectionState.value = ConnectionState.Failed("Connection lost", 0)
 
-        // Có thể auto-retry hoặc để user quyết định
+        // Auto retry sau 3s
         viewModelScope.launch {
-            delay(3000) // Wait 3s then try to reconnect
+            delay(3000)
             if (!isOfflineMode) {
-                connectionAttempts = 0 // Reset attempts for reconnection
+                connectionAttempts = 0
                 startConnection()
             }
         }

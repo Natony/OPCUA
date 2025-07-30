@@ -424,7 +424,7 @@ class OPCUARepositoryImpl(
 
         if (index in boolNodeIds.indices) {
             val nodeIdString = boolNodeIds[index]
-            val accessLevel = OPCUAClientManager.readAccessLevel(nodeIdString)
+            val accessLevel = OPCUAClientManager.   readAccessLevel(nodeIdString)
             if (accessLevel != null && (accessLevel.toInt() and 0x02) != 0) {
                 val status = OPCUAClientManager.writeNode(nodeIdString, value)
                 if (status == null || !status.isGood) {
