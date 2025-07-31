@@ -70,6 +70,10 @@ class ControlViewModel @Inject constructor(
     private val buttonOperationMutex = Mutex()
     private val globalProcessingMutex = Mutex()
 
+    // control auto-retry
+    private var autoRetryEnabled = true
+    private var isShowingTimeoutDialog = false
+
     // THREAD-SAFE: Atomic reference for current processing button
     @Volatile
     private var currentProcessingButton: Int? = null
@@ -274,19 +278,18 @@ class ControlViewModel @Inject constructor(
         connectionStarted = false
         connectionTimeoutManager.cancelTimeout()
 
+        // Disable auto-retry khi showing timeout dialog
+        autoRetryEnabled = false
+        isShowingTimeoutDialog = true
+
         viewModelScope.launch {
             if (connectionAttempts < maxRetryAttempts) {
-                // Still have retries left
                 _connectionState.value = ConnectionState.Failed(
                     "Connection timeout (attempt $connectionAttempts/$maxRetryAttempts)",
                     connectionAttempts
                 )
-
-                // Auto retry after delay
-                delay(2000)
-                startConnection()
+                // KHÔNG auto retry ở đây
             } else {
-                // Max retries exceeded
                 _connectionState.value = ConnectionState.MaxRetriesExceeded(
                     "Failed to connect after $maxRetryAttempts attempts"
                 )
@@ -355,12 +358,14 @@ class ControlViewModel @Inject constructor(
 
         _connectionState.value = ConnectionState.Failed("Connection lost", 0)
 
-        // Auto retry sau 3s
-        viewModelScope.launch {
-            delay(3000)
-            if (!isOfflineMode) {
-                connectionAttempts = 0
-                startConnection()
+        // Chỉ auto retry nếu được phép và không đang show timeout dialog
+        if (autoRetryEnabled && !isShowingTimeoutDialog && !isOfflineMode) {
+            viewModelScope.launch {
+                delay(3000)
+                if (autoRetryEnabled && !isShowingTimeoutDialog && !isOfflineMode) {
+                    connectionAttempts = 0
+                    startConnection()
+                }
             }
         }
     }
@@ -368,24 +373,38 @@ class ControlViewModel @Inject constructor(
     // THÊM: Cho phép tiếp tục ở chế độ offline
     fun continueOffline() {
         Log.d("ControlVM", "🔌 Continuing in offline mode")
-        isOfflineMode = true
-        connectionStarted = false
-        connectionAttempts = 0
 
-        _connectionState.value = ConnectionState.Offline
-        _uiState.update {
-            it.copy(
-                loadingPercent = 100, // Set to 100 to show UI
-                errorMessage = null,
-                // In offline mode: lock dangerous buttons but allow navigation/view
-                lockedButtons = setOf(10, 11, 12), // Lock only critical buttons like Emergency Stop
-                busyButtons = emptySet(),
-                plcData = PlcData(
-                    bools = List(15) { false },
-                    ints = List(31) { 0 }
+        viewModelScope.launch {
+            // Stop everything first
+            stopConnection()
+            delay(500) // Wait for cleanup
+
+            // Now set offline state
+            isOfflineMode = true
+            connectionStarted = false
+            connectionAttempts = 0
+            autoRetryEnabled = false
+            isShowingTimeoutDialog = false
+
+            _connectionState.value = ConnectionState.Offline
+            _uiState.update {
+                it.copy(
+                    loadingPercent = 0, // Set to 0, not 100
+                    errorMessage = null,
+                    lockedButtons = (0..14).toSet() + (203..204).toSet(), // Lock all buttons in offline
+                    busyButtons = emptySet(),
+                    plcData = PlcData(
+                        bools = List(15) { false },
+                        ints = List(31) { 0 }
+                    )
                 )
-            )
+            }
         }
+    }
+
+    fun dismissTimeoutDialog() {
+        isShowingTimeoutDialog = false
+        autoRetryEnabled = true
     }
 
     // THÊM: Reset connection attempts

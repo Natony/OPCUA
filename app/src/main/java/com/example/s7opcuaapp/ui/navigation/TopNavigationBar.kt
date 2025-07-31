@@ -46,18 +46,17 @@ fun TopNavigationBar(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Connection state color animation
+    // Animated color for connection
     val connectionColor by animateColorAsState(
         targetValue = when (connectionState) {
-            is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50) // Green
-            is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFC107) // Amber
-            is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336) // Red
-            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Color(0xFF9C27B0) // Purple
-            is ControlViewModel.ConnectionState.Timeout -> Color(0xFFFF5722) // Deep Orange
-            is ControlViewModel.ConnectionState.Offline -> Color(0xFF607D8B) // Blue Grey
-            else -> Color(0xFF9E9E9E) // Gray
-        },
-        animationSpec = tween(300)
+            is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50)
+            is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFC107)
+            is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336)
+            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Color(0xFF9C27B0)
+            is ControlViewModel.ConnectionState.Timeout -> Color(0xFFFF5722)
+            is ControlViewModel.ConnectionState.Offline -> Color(0xFF607D8B)
+            else -> Color(0xFF9E9E9E)
+        }, animationSpec = tween(300)
     )
 
     val connectionText = when (connectionState) {
@@ -78,108 +77,57 @@ fun TopNavigationBar(
         else -> Icons.Default.WifiOff
     }
 
-    // Blinking animation for connecting state
+    // Blink animation for connecting
     val infiniteTransition = rememberInfiniteTransition()
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        )
+        initialValue = 1f, targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(animation = tween(1000), repeatMode = RepeatMode.Reverse)
     )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp), // Slightly taller for 2 rows
+            .height(64.dp),
         shadowElevation = 4.dp
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // First row - Device and Connection Status
+            // Remove first row, merge into second
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(24.dp)
-                    .background(
-                        when (connectionState) {
-                            is ControlViewModel.ConnectionState.Connected ->
-                                MaterialTheme.colorScheme.surfaceVariant
-                            is ControlViewModel.ConnectionState.Offline ->
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
-                            is ControlViewModel.ConnectionState.Failed,
-                            is ControlViewModel.ConnectionState.MaxRetriesExceeded ->
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        }
-                    ),
+                    .height(64.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Device name
+                // Connection status + device (30%)
                 Row(
                     modifier = Modifier
-                        .weight(0.6f)
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_device),
-                        contentDescription = "Device",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = deviceName,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Connection status
-                Row(
-                    modifier = Modifier
-                        .weight(0.4f)
+                        .weight(0.30f)
+                        .fillMaxHeight()
                         .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = connectionIcon,
                         contentDescription = "Connection",
-                        modifier = Modifier.size(16.dp),
-                        tint = if (connectionState is ControlViewModel.ConnectionState.Connecting) {
-                            connectionColor.copy(alpha = alpha)
-                        } else {
-                            connectionColor
-                        }
+                        modifier = Modifier.size(20.dp),
+                        tint = if (connectionState is ControlViewModel.ConnectionState.Connecting) connectionColor.copy(alpha = alpha) else connectionColor
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = connectionText,
+                        text = "$deviceName - $connectionText",
                         style = MaterialTheme.typography.labelSmall,
                         color = connectionColor,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 12.sp
                     )
                 }
-            }
 
-            // Second row - Status, Navigation, Battery, Logout
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Status display - 25% width
+                // Status display (35%)
                 Box(
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.weight(0.35f),
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
@@ -188,99 +136,65 @@ fun TopNavigationBar(
                             .padding(vertical = 4.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = when (statusValue) {
-                                0 -> Color(0xFFE0E0E0)  // Gray for not ready
-                                1 -> Color(0xFFC8E6C9)  // Light green for ready
-                                in 2..6 -> Color(0xFFFFF9C4)  // Light yellow for executing
-                                7 -> Color(0xFFA5D6A7)  // Green for complete
-                                11 -> Color(0xFFFFCDD2) // Light red for emergency
+                                0 -> Color(0xFFE0E0E0)
+                                1 -> Color(0xFFC8E6C9)
+                                in 2..6 -> Color(0xFFFFF9C4)
+                                7 -> Color(0xFFA5D6A7)
+                                11 -> Color(0xFFFFCDD2)
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             }
                         )
                     ) {
                         Text(
-                            text = StatusLockConfig.DEFAULT_STATUS_DESCRIPTIONS[statusValue]
-                                ?: "Unknown",
+                            text = StatusLockConfig.DEFAULT_STATUS_DESCRIPTIONS[statusValue] ?: "Unknown",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
-                            color = when (statusValue) {
-                                11 -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                            color = if (statusValue == 11) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
                 }
 
-                // Navigation Icons - 50% width
+                // Navigation icons (20%)
                 Row(
-                    modifier = Modifier.weight(0.5f),
+                    modifier = Modifier.weight(0.20f),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items.forEach { item ->
                         IconButton(
-                            onClick = {
-                                if (currentRoute != item.route) {
-                                    navController.navigate(item.route) {
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            modifier = Modifier.size(40.dp)
+                            onClick = { if (currentRoute != item.route) navController.navigate(item.route) },
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = item.iconRes),
                                 contentDescription = item.title,
-                                tint = if (currentRoute == item.route) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(22.dp)
+                                tint = if (currentRoute == item.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
-                // Battery - 15% width
-                Box(
-                    modifier = Modifier.weight(0.15f),
-                    contentAlignment = Alignment.Center
-                ) {
+                // Battery (10%)
+                Box(modifier = Modifier.weight(0.07f), contentAlignment = Alignment.Center) {
                     BatteryStatusItem(
                         level = batteryLevel,
                         thresholds = listOf(20, 80),
-                        icons = listOf(
-                            R.drawable.ic_battery_low,
-                            R.drawable.ic_battery_medium,
-                            R.drawable.ic_battery_full
-                        ),
-                        modifier = Modifier.size(40.dp)
+                        icons = listOf(R.drawable.ic_battery_low, R.drawable.ic_battery_medium, R.drawable.ic_battery_full),
+                        modifier = Modifier.size(32.dp)
                     )
                 }
 
-                // Logout button - 10% width
-                Box(
-                    modifier = Modifier.weight(0.1f),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    IconButton(
-                        onClick = onLogout,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Logout",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(22.dp)
-                        )
+                // Logout (10)
+                Box(modifier = Modifier.weight(0.03f), contentAlignment = Alignment.CenterEnd) {
+                    IconButton(onClick = onLogout, modifier = Modifier.size(36.dp)) {
+                        Icon(imageVector = Icons.Default.ExitToApp, contentDescription = "Logout", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

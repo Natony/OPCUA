@@ -24,7 +24,9 @@ fun ControlScreen(
     onTextChange: (Int, String) -> Unit,
     onSendAll: () -> Unit,
     onPressButton: (Int) -> Boolean,
-    onReleaseButton: (Int) -> Boolean
+    onReleaseButton: (Int) -> Boolean,
+    onDismissTimeoutDialog: () -> Unit = {},
+    onContinueOffline: () -> Unit
 ) {
     val data = uiState.plcData
     var isAuto by remember { mutableStateOf(true) }
@@ -42,16 +44,19 @@ fun ControlScreen(
                 Log.d("ControlScreen", "Connection timeout/max retries detected")
                 showTimeoutDialog = true
                 timeoutCountdown = 10
-                preventAutoDismiss = true
+                preventAutoDismiss = false
+
+                // Notify ViewModel that timeout dialog is showing
+                onDismissTimeoutDialog() // This will disable auto-retry
 
                 // Start countdown
-                while (timeoutCountdown > 0 && showTimeoutDialog) {
+                while (timeoutCountdown > 0 && showTimeoutDialog && !preventAutoDismiss) {
                     delay(1000)
                     timeoutCountdown--
                 }
 
-                // Navigate to config after countdown
-                if (showTimeoutDialog) {
+                // Navigate to config after countdown if not dismissed
+                if (showTimeoutDialog && !preventAutoDismiss) {
                     onNavigateToConfig()
                 }
             }
@@ -92,11 +97,13 @@ fun ControlScreen(
             }
         }
     }
-
     Box(modifier = Modifier.fillMaxSize()) {
         // Main UI - Show when connected and data loaded
-        val showMainUI = connectionState is ControlViewModel.ConnectionState.Connected &&
-                (uiState.loadingPercent == 100 || uiState.loadingPercent == 0) // 0 for restart case
+        val showMainUI =
+            (connectionState is ControlViewModel.ConnectionState.Connected &&
+                    (uiState.loadingPercent == 100 || uiState.loadingPercent == 0)) ||
+                    connectionState is ControlViewModel.ConnectionState.Offline
+
 
         if (showMainUI) {
             MainControlContent(
@@ -117,11 +124,13 @@ fun ControlScreen(
         }
 
         // Connection state overlays
-        ConnectionStateOverlay(
-            connectionState = connectionState,
-            loadingPercent = uiState.loadingPercent,
-            onRetryConnection = onRetryConnection
-        )
+        if (connectionState !is ControlViewModel.ConnectionState.Offline) {
+            ConnectionStateOverlay(
+                connectionState = connectionState,
+                loadingPercent = uiState.loadingPercent,
+                onRetryConnection = onRetryConnection
+            )
+        }
 
         // Timeout dialog
         if (showTimeoutDialog) {
@@ -130,6 +139,7 @@ fun ControlScreen(
                 onRetryConnection = {
                     showTimeoutDialog = false
                     preventAutoDismiss = false
+                    (uiState as? ControlViewModel)?.dismissTimeoutDialog()
                     onRetryConnection()
                 },
                 onNavigateToConfig = {
@@ -141,7 +151,7 @@ fun ControlScreen(
                     showTimeoutDialog = false
                     preventAutoDismiss = false
                     // Continue in offline mode
-                    (uiState as? ControlViewModel)?.continueOfflineFromDialog()
+                    onContinueOffline()
                 }
             )
         }

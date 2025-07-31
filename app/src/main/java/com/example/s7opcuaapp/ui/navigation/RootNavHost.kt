@@ -7,6 +7,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.s7opcuaapp.ui.screen.alarm.AlarmScreen
 import com.example.s7opcuaapp.ui.screen.config.ConfigScreen
 import com.example.s7opcuaapp.ui.screen.login.LoginScreen
 import com.example.s7opcuaapp.viewmodel.ConfigViewModel
@@ -69,6 +70,12 @@ fun RootNavHost(navController: NavHostController) {
         // 3. MainNavGraph (có TopNavigationBar)
         composable("main") {
             MainNavGraph(rootNavController = navController)
+        }
+
+        composable("alarm") {
+            AlarmScreen(
+                navController = navController
+            )
         }
     }
 }

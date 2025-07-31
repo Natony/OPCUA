@@ -166,7 +166,11 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onReleaseButton = { index ->
                         controlViewModel.onReleaseButton(index)
                         true
-                    }
+                    },
+                    onDismissTimeoutDialog = {
+                        controlViewModel.dismissTimeoutDialog()
+                    },
+                    onContinueOffline = { controlViewModel.continueOffline() }
                 )
             }
 

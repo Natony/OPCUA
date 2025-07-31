@@ -2,7 +2,9 @@ package com.example.s7opcuaapp.ui.screen.control
 
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.s7opcuaapp.data.model.PlcData
+import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 
 @Preview(showBackground = true, widthDp = 1080, heightDp = 720)
@@ -27,12 +29,15 @@ fun ControlScreenPreview() {
             6 to "50",
             7 to "60"
         ),
-        loadingPercent = 100, // Fully loaded for preview
+        loadingPercent = 100,
         lockedButtons = emptySet(),
         busyButtons = emptySet(),
         isProcessing = false,
         errorMessage = null
     )
+
+    // Obtain a ViewModel for preview
+    val previewViewModel: ControlViewModel = viewModel()
 
     ControlScreen(
         uiState = sampleState,
@@ -47,7 +52,9 @@ fun ControlScreenPreview() {
         onTextChange = { _, _ -> },
         onSendAll = {},
         onPressButton = { _ -> false },
-        onReleaseButton = { _ -> false }
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
     )
 }
 
@@ -56,8 +63,10 @@ fun ControlScreenPreview() {
 fun ControlScreenConnectingPreview() {
     val sampleState = ControlUiState(
         plcData = PlcData.empty(),
-        loadingPercent = 45 // Loading in progress
+        loadingPercent = 45
     )
+
+    val previewViewModel: ControlViewModel = viewModel()
 
     ControlScreen(
         uiState = sampleState,
@@ -72,7 +81,9 @@ fun ControlScreenConnectingPreview() {
         onTextChange = { _, _ -> },
         onSendAll = {},
         onPressButton = { _ -> false },
-        onReleaseButton = { _ -> false }
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
     )
 }
 
@@ -83,6 +94,8 @@ fun ControlScreenFailedPreview() {
         plcData = PlcData.empty(),
         errorMessage = "Connection to PLC failed"
     )
+
+    val previewViewModel: ControlViewModel = viewModel()
 
     ControlScreen(
         uiState = sampleState,
@@ -100,7 +113,9 @@ fun ControlScreenFailedPreview() {
         onTextChange = { _, _ -> },
         onSendAll = {},
         onPressButton = { _ -> false },
-        onReleaseButton = { _ -> false }
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
     )
 }
 
@@ -115,8 +130,10 @@ fun ControlScreenOfflinePreview() {
     val sampleState = ControlUiState(
         plcData = samplePlcData,
         errorMessage = "Working offline",
-        lockedButtons = (0..14).toSet() // All buttons locked in offline mode
+        lockedButtons = (0..14).toSet()
     )
+
+    val previewViewModel: ControlViewModel = viewModel()
 
     ControlScreen(
         uiState = sampleState,
@@ -131,6 +148,8 @@ fun ControlScreenOfflinePreview() {
         onTextChange = { _, _ -> },
         onSendAll = {},
         onPressButton = { _ -> false },
-        onReleaseButton = { _ -> false }
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
     )
 }
