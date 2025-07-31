@@ -32,6 +32,7 @@ fun ControlScreen(
     // Connection timeout dialog state
     var showTimeoutDialog by remember { mutableStateOf(false) }
     var timeoutCountdown by remember { mutableStateOf(10) }
+    var preventAutoDismiss by remember { mutableStateOf(false) }
 
     // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
@@ -41,6 +42,7 @@ fun ControlScreen(
                 Log.d("ControlScreen", "Connection timeout/max retries detected")
                 showTimeoutDialog = true
                 timeoutCountdown = 10
+                preventAutoDismiss = true
 
                 // Start countdown
                 while (timeoutCountdown > 0 && showTimeoutDialog) {
@@ -59,6 +61,7 @@ fun ControlScreen(
                     connectionState.error.contains("max failures", ignoreCase = true)) {
                     showTimeoutDialog = true
                     timeoutCountdown = 10
+                    preventAutoDismiss = true
 
                     while (timeoutCountdown > 0 && showTimeoutDialog) {
                         delay(1000)
@@ -126,11 +129,19 @@ fun ControlScreen(
                 timeoutCountdown = timeoutCountdown,
                 onRetryConnection = {
                     showTimeoutDialog = false
+                    preventAutoDismiss = false
                     onRetryConnection()
                 },
                 onNavigateToConfig = {
                     showTimeoutDialog = false
+                    preventAutoDismiss = false
                     onNavigateToConfig()
+                },
+                onContinueOffline = {
+                    showTimeoutDialog = false
+                    preventAutoDismiss = false
+                    // Continue in offline mode
+                    (uiState as? ControlViewModel)?.continueOfflineFromDialog()
                 }
             )
         }

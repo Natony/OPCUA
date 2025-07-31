@@ -299,13 +299,14 @@ class ControlViewModel @Inject constructor(
         connectionMonitorJob = viewModelScope.launch {
             var consecutiveFailures = 0
             val maxConsecutiveFailures = 2 // Fail after 2 consecutive failures
+            val checkInterval = 1500L
 
             while (connectionStarted && _connectionState.value is ConnectionState.Connected) {
                 delay(3000L) // Check every 3 seconds instead of 5
 
                 try {
                     // More aggressive connection check
-                    val isConnected = withTimeoutOrNull(2000L) {
+                    val isConnected = withTimeoutOrNull(1000L) {
                         repoImpl.isConnected()
                     } ?: false
 
@@ -333,6 +334,11 @@ class ControlViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun continueOfflineFromDialog() {
+        Log.d("ControlVM", "🔌 User chose to continue in offline mode")
+        continueOffline()
     }
 
     private fun handleConnectionLost() {
