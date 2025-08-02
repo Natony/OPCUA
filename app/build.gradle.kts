@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.0.21-1.0.27"
     id("com.google.dagger.hilt.android")
+    id("org.jetbrains.dokka") version "1.9.10"
 }
 
 android {
@@ -13,6 +14,10 @@ android {
     packaging {
         resources.excludes.add("META-INF/*")
         resources.excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+    }
+
+    tasks.dokkaHtml {
+        outputDirectory.set(buildDir.resolve("docs/dokka"))
     }
 
     defaultConfig {

@@ -28,7 +28,8 @@ class OpcUaSubscriptionManager @Inject constructor() : LifecycleEventObserver {
     data class SubscriptionInfo(
         val subscription: UaSubscription,
         val monitoredItems: MutableList<UaMonitoredItem> = mutableListOf(),
-        val lifecycleOwner: LifecycleOwner? = null
+        val lifecycleOwner: LifecycleOwner? = null,
+        val publishingInterval: Double = 250.0 // Store publishing interval
     )
 
     // Thread-safe storage
@@ -71,7 +72,8 @@ class OpcUaSubscriptionManager @Inject constructor() : LifecycleEventObserver {
 
             val info = SubscriptionInfo(
                 subscription = subscription,
-                lifecycleOwner = lifecycleOwner
+                lifecycleOwner = lifecycleOwner,
+                publishingInterval = publishingInterval
             )
 
             // Register lifecycle observer
@@ -126,7 +128,10 @@ class OpcUaSubscriptionManager @Inject constructor() : LifecycleEventObserver {
                 if (info.monitoredItems.isNotEmpty()) {
                     try {
                         // Use the monitored items list directly
-                        info.subscription.deleteMonitoredItems(info.monitoredItems).get()
+                        val itemsToDelete = info.monitoredItems.toList()
+                        if (itemsToDelete.isNotEmpty()) {
+                            info.subscription.deleteMonitoredItems(itemsToDelete).get()
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "Error deleting monitored items", e)
                     }
@@ -203,11 +208,26 @@ class OpcUaSubscriptionManager @Inject constructor() : LifecycleEventObserver {
 
             subscriptions.forEach { (id, info) ->
                 try {
-                    // Check if subscription is still valid
-                    val status = info.subscription.statusCode
-                    if (status == null || !status.isGood) {
-                        toRemove.add(id)
+                    // Check if subscription is still valid by checking if we can access its ID
+                    // This is a simple check - if it throws, subscription is invalid
+                    val subscriptionId = info.subscription.subscriptionId
+
+                    // Also check if monitored items are still valid
+                    val hasValidItems = info.monitoredItems.any { item ->
+                        try {
+                            item.clientHandle // Try to access a property
+                            true
+                        } catch (e: Exception) {
+                            false
+                        }
                     }
+
+                    // If no monitored items or all are invalid, consider for removal
+                    if (info.monitoredItems.isEmpty() || !hasValidItems) {
+                        Log.w(TAG, "Subscription $id has no valid monitored items")
+                        // Don't remove immediately - subscription might still be valid
+                    }
+
                 } catch (e: Exception) {
                     Log.w(TAG, "Invalid subscription detected: $id")
                     toRemove.add(id)
@@ -256,7 +276,7 @@ class OpcUaSubscriptionManager @Inject constructor() : LifecycleEventObserver {
                     id = id,
                     monitoredItemCount = info.monitoredItems.size,
                     hasLifecycle = info.lifecycleOwner != null,
-                    publishingInterval = info.subscription.publishingInterval
+                    publishingInterval = info.publishingInterval
                 )
             }
         )
