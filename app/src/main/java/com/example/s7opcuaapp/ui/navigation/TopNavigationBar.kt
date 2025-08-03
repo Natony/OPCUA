@@ -26,6 +26,7 @@ import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BatteryStatusItem
 import com.example.s7opcuaapp.util.StatusLockConfig
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 
 @Composable
 fun TopNavigationBar(
@@ -33,7 +34,7 @@ fun TopNavigationBar(
     statusValue: Int = 0,
     batteryLevel: Int = 100,
     deviceName: String = "No Device",
-    connectionState: ControlViewModel.ConnectionState,
+    connectionState: ConnectionState,
     onLogout: () -> Unit = {}
 ) {
     val items = listOf(
@@ -49,31 +50,31 @@ fun TopNavigationBar(
     // Animated color for connection
     val connectionColor by animateColorAsState(
         targetValue = when (connectionState) {
-            is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50)
-            is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFC107)
-            is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336)
-            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Color(0xFF9C27B0)
-            is ControlViewModel.ConnectionState.Timeout -> Color(0xFFFF5722)
-            is ControlViewModel.ConnectionState.Offline -> Color(0xFF607D8B)
+            is ConnectionState.Connected -> Color(0xFF4CAF50)
+            is ConnectionState.Connecting -> Color(0xFFFFC107)
+            is ConnectionState.Failed -> Color(0xFFF44336)
+            is ConnectionState.MaxRetriesExceeded -> Color(0xFF9C27B0)
+            is ConnectionState.Timeout -> Color(0xFFFF5722)
+            is ConnectionState.Offline -> Color(0xFF607D8B)
             else -> Color(0xFF9E9E9E)
         }, animationSpec = tween(300)
     )
 
     val connectionText = when (connectionState) {
-        is ControlViewModel.ConnectionState.Connected -> "Connected"
-        is ControlViewModel.ConnectionState.Connecting -> "Connecting... (${connectionState.attempt}/3)"
-        is ControlViewModel.ConnectionState.Failed -> "Failed (${connectionState.attempt}/3)"
-        is ControlViewModel.ConnectionState.MaxRetriesExceeded -> "Connection Failed"
-        is ControlViewModel.ConnectionState.Timeout -> "Timeout"
-        is ControlViewModel.ConnectionState.Offline -> "Offline Mode"
+        is ConnectionState.Connected -> "Connected"
+        is ConnectionState.Connecting -> "Connecting... (${connectionState.attempt}/3)"
+        is ConnectionState.Failed -> "Failed (${connectionState.attempt}/3)"
+        is ConnectionState.MaxRetriesExceeded -> "Connection Failed"
+        is ConnectionState.Timeout -> "Timeout"
+        is ConnectionState.Offline -> "Offline Mode"
         else -> "Disconnected"
     }
 
     val connectionIcon = when (connectionState) {
-        is ControlViewModel.ConnectionState.Connected -> Icons.Default.Wifi
-        is ControlViewModel.ConnectionState.Offline -> Icons.Default.WifiOff
-        is ControlViewModel.ConnectionState.Failed,
-        is ControlViewModel.ConnectionState.MaxRetriesExceeded -> Icons.Default.ErrorOutline
+        is ConnectionState.Connected -> Icons.Default.Wifi
+        is ConnectionState.Offline -> Icons.Default.WifiOff
+        is ConnectionState.Failed,
+        is ConnectionState.MaxRetriesExceeded -> Icons.Default.ErrorOutline
         else -> Icons.Default.WifiOff
     }
 
@@ -111,7 +112,7 @@ fun TopNavigationBar(
                         imageVector = connectionIcon,
                         contentDescription = "Connection",
                         modifier = Modifier.size(20.dp),
-                        tint = if (connectionState is ControlViewModel.ConnectionState.Connecting) connectionColor.copy(alpha = alpha) else connectionColor
+                        tint = if (connectionState is ConnectionState.Connecting) connectionColor.copy(alpha = alpha) else connectionColor
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(

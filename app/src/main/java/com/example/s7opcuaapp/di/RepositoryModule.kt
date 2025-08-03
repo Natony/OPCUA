@@ -81,10 +81,10 @@ object RepositoryModule {
         )
 
         return OptimizedOPCUARepositoryImpl(
-            device = device,
             database = database,
             dataBuffer = dataBuffer,
-            performanceMonitor = performanceMonitor
+            performanceMonitor = performanceMonitor,
+            prefsManager = prefsManager
         )
     }
 }

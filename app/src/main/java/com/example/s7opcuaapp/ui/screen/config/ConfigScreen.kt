@@ -20,11 +20,11 @@ import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.viewmodel.ConfigUiState
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
-
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 @Composable
 fun ConfigScreen(
     uiState: ConfigUiState,
-    connectionState: ControlViewModel.ConnectionState? = null,
+    connectionState: ConnectionState? = null,
     onNewDeviceNameChanged: (String) -> Unit,
     onNewDeviceIpChanged: (String) -> Unit,
     onNewDevicePortChanged: (String) -> Unit,
@@ -50,9 +50,9 @@ fun ConfigScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = when (state) {
-                            is ControlViewModel.ConnectionState.Connected -> Color(0xFFE8F5E9)
-                            is ControlViewModel.ConnectionState.Connecting -> Color(0xFFFFF9C4)
-                            is ControlViewModel.ConnectionState.Failed -> Color(0xFFFFEBEE)
+                            is ConnectionState.Connected -> Color(0xFFE8F5E9)
+                            is ConnectionState.Connecting -> Color(0xFFFFF9C4)
+                            is ConnectionState.Failed -> Color(0xFFFFEBEE)
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         }
                     )
@@ -65,24 +65,24 @@ fun ConfigScreen(
                     ) {
                         Icon(
                             imageVector = when (state) {
-                                is ControlViewModel.ConnectionState.Connected -> Icons.Default.CheckCircle
-                                is ControlViewModel.ConnectionState.Failed -> Icons.Default.Error
+                                is ConnectionState.Connected -> Icons.Default.CheckCircle
+                                is ConnectionState.Failed -> Icons.Default.Error
                                 else -> Icons.Default.Info
                             },
                             contentDescription = null,
                             tint = when (state) {
-                                is ControlViewModel.ConnectionState.Connected -> Color(0xFF4CAF50)
-                                is ControlViewModel.ConnectionState.Failed -> Color(0xFFF44336)
+                                is ConnectionState.Connected -> Color(0xFF4CAF50)
+                                is ConnectionState.Failed -> Color(0xFFF44336)
                                 else -> MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = when (state) {
-                                is ControlViewModel.ConnectionState.Connected -> "Connected to PLC"
-                                is ControlViewModel.ConnectionState.Connecting -> "Connecting..."
-                                is ControlViewModel.ConnectionState.Failed -> "Connection failed: ${state.error}"
-                                is ControlViewModel.ConnectionState.Timeout -> "Connection timeout"
+                                is ConnectionState.Connected -> "Connected to PLC"
+                                is ConnectionState.Connecting -> "Connecting..."
+                                is ConnectionState.Failed -> "Connection failed: ${state.error}"
+                                is ConnectionState.Timeout -> "Connection timeout"
                                 else -> "Not connected"
                             },
                             style = MaterialTheme.typography.bodyMedium

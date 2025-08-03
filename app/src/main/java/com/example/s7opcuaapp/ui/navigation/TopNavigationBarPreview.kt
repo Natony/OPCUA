@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.rememberNavController
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 
 @Preview(showBackground = true, widthDp = 1080, heightDp = 100)
 @Composable
@@ -13,7 +14,7 @@ fun TopNavigationBarPreviewConnected() {
         statusValue = 1,
         batteryLevel = 75,
         deviceName = "PLC-01",
-        connectionState = ControlViewModel.ConnectionState.Connected,
+        connectionState = ConnectionState.Connected,
         onLogout = {}
     )
 }
@@ -26,7 +27,7 @@ fun TopNavigationBarPreviewConnecting() {
         statusValue = 2,
         batteryLevel = 50,
         deviceName = "PLC-02",
-        connectionState = ControlViewModel.ConnectionState.Connecting(attempt = 2),
+        connectionState = ConnectionState.Connecting(attempt = 2),
         onLogout = {}
     )
 }
@@ -39,7 +40,7 @@ fun TopNavigationBarPreviewFailed() {
         statusValue = 11,
         batteryLevel = 10,
         deviceName = "PLC-Error",
-        connectionState = ControlViewModel.ConnectionState.Failed(
+        connectionState = ConnectionState.Failed(
             error = "Timeout",
             attempt = 3
         ),
@@ -55,7 +56,7 @@ fun TopNavigationBarPreviewOffline() {
         statusValue = 0,
         batteryLevel = 100,
         deviceName = "PLC-Offline",
-        connectionState = ControlViewModel.ConnectionState.Offline,
+        connectionState = ConnectionState.Offline,
         onLogout = {}
     )
 }

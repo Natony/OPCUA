@@ -2,22 +2,22 @@ package com.example.s7opcuaapp.ui.components
 
 import androidx.compose.runtime.Composable
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
-
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 @Composable
 internal fun ConnectionStateOverlay(
-    connectionState: ControlViewModel.ConnectionState,
+    connectionState: ConnectionState,
     loadingPercent: Int,
     onRetryConnection: () -> Unit
 ) {
     when (connectionState) {
-        is ControlViewModel.ConnectionState.Connecting -> {
+        is ConnectionState.Connecting -> {
             LoadingOverlay(
                 message = "Connecting to PLC...",
                 loadingPercent = if (loadingPercent > 0) loadingPercent else null
             )
         }
 
-        is ControlViewModel.ConnectionState.Connected -> {
+        is ConnectionState.Connected -> {
             // Show loading overlay only if actively loading
             if (loadingPercent in 1..99) {
                 LoadingOverlay(
@@ -28,7 +28,7 @@ internal fun ConnectionStateOverlay(
             }
         }
 
-        is ControlViewModel.ConnectionState.Failed -> {
+        is ConnectionState.Failed -> {
             // Only show full overlay for critical errors
             if (!connectionState.error.contains("Connection lost")) {
                 ErrorOverlay(

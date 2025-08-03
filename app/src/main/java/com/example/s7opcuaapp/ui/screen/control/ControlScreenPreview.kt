@@ -4,6 +4,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.s7opcuaapp.data.model.PlcData
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 
@@ -41,7 +42,7 @@ fun ControlScreenPreview() {
 
     ControlScreen(
         uiState = sampleState,
-        connectionState = ControlViewModel.ConnectionState.Connected,
+        connectionState = ConnectionState.Connected,
         onNavigateToConfig = {},
         onRetryConnection = {},
         onToggleBoolean = { _, _ -> },
@@ -70,7 +71,7 @@ fun ControlScreenConnectingPreview() {
 
     ControlScreen(
         uiState = sampleState,
-        connectionState = ControlViewModel.ConnectionState.Connecting(attempt = 2),
+        connectionState = ConnectionState.Connecting(attempt = 2),
         onNavigateToConfig = {},
         onRetryConnection = {},
         onToggleBoolean = { _, _ -> },
@@ -99,7 +100,7 @@ fun ControlScreenFailedPreview() {
 
     ControlScreen(
         uiState = sampleState,
-        connectionState = ControlViewModel.ConnectionState.Failed(
+        connectionState = ConnectionState.Failed(
             error = "Connection timeout",
             attempt = 3
         ),
@@ -137,7 +138,7 @@ fun ControlScreenOfflinePreview() {
 
     ControlScreen(
         uiState = sampleState,
-        connectionState = ControlViewModel.ConnectionState.Offline,
+        connectionState = ConnectionState.Offline,
         onNavigateToConfig = {},
         onRetryConnection = {},
         onToggleBoolean = { _, _ -> },

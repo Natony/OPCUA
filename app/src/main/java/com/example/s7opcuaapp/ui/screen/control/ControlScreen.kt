@@ -7,13 +7,15 @@ import androidx.compose.ui.Modifier
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.delay
 import android.util.Log
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 import com.example.s7opcuaapp.ui.components.MainControlContent
 import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
 import com.example.s7opcuaapp.ui.components.TimeoutDialog
+
 @Composable
 fun ControlScreen(
     uiState: ControlUiState,
-    connectionState: ControlViewModel.ConnectionState,
+    connectionState: ConnectionState,
     onNavigateToConfig: () -> Unit,
     onRetryConnection: () -> Unit,
     onToggleBoolean: (Int, Boolean) -> Unit,
@@ -39,8 +41,8 @@ fun ControlScreen(
     // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
         when (connectionState) {
-            is ControlViewModel.ConnectionState.Timeout,
-            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> {
+            is ConnectionState.Timeout,
+            is ConnectionState.MaxRetriesExceeded -> {
                 Log.d("ControlScreen", "Connection timeout/max retries detected")
                 showTimeoutDialog = true
                 timeoutCountdown = 10
@@ -60,7 +62,7 @@ fun ControlScreen(
                     onNavigateToConfig()
                 }
             }
-            is ControlViewModel.ConnectionState.Failed -> {
+            is ConnectionState.Failed -> {
                 // For critical failures, show timeout dialog
                 if (connectionState.error.contains("timeout", ignoreCase = true) ||
                     connectionState.error.contains("max failures", ignoreCase = true)) {
@@ -87,10 +89,10 @@ fun ControlScreen(
 
     // Safety mechanism for stuck loading
     LaunchedEffect(connectionState, uiState.loadingPercent) {
-        if (connectionState is ControlViewModel.ConnectionState.Connecting &&
+        if (connectionState is ConnectionState.Connecting &&
             uiState.loadingPercent in 1..99) {
             delay(30000) // 30 seconds timeout
-            if (connectionState is ControlViewModel.ConnectionState.Connecting &&
+            if (connectionState is ConnectionState.Connecting &&
                 uiState.loadingPercent in 1..99) {
                 Log.e("ControlScreen", "Loading stuck after 30 seconds")
                 showTimeoutDialog = true
@@ -100,9 +102,9 @@ fun ControlScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         // Main UI - Show when connected and data loaded
         val showMainUI =
-            (connectionState is ControlViewModel.ConnectionState.Connected &&
+            (connectionState is ConnectionState.Connected &&
                     (uiState.loadingPercent == 100 || uiState.loadingPercent == 0)) ||
-                    connectionState is ControlViewModel.ConnectionState.Offline
+                    connectionState is ConnectionState.Offline
 
 
         if (showMainUI) {
@@ -124,7 +126,7 @@ fun ControlScreen(
         }
 
         // Connection state overlays
-        if (connectionState !is ControlViewModel.ConnectionState.Offline) {
+        if (connectionState !is ConnectionState.Offline) {
             ConnectionStateOverlay(
                 connectionState = connectionState,
                 loadingPercent = uiState.loadingPercent,

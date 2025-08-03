@@ -30,6 +30,7 @@ import com.example.s7opcuaapp.ui.screen.usermanager.UserManagerScreen
 import com.example.s7opcuaapp.viewmodel.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.example.s7opcuaapp.domain.connection.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +64,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 currentDevice.value = prefsManager.getCurrentDevice()
 
                 // Start connection if needed
-                if (shouldReconnect || connectionState == ControlViewModel.ConnectionState.Idle) {
+                if (shouldReconnect || connectionState == ConnectionState.Idle) {
                     Log.d("MainNavGraph", "Starting connection on control screen")
                     shouldReconnect = false
                     controlViewModel.startConnection()
@@ -81,7 +82,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
     LaunchedEffect(connectionState) {
         val currentConnectionState = connectionState // Capture for smart cast
         when (currentConnectionState) {
-            is ControlViewModel.ConnectionState.MaxRetriesExceeded -> {
+            is ConnectionState.MaxRetriesExceeded -> {
                 Log.e("MainNavGraph", "Max retries exceeded: ${currentConnectionState.reason}")
                 // Could show a global error dialog or navigate to config
                 if (currentRoute == "control") {
@@ -89,11 +90,11 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     topNavController.navigate("config_btm")
                 }
             }
-            is ControlViewModel.ConnectionState.Timeout -> {
+            is ConnectionState.Timeout -> {
                 Log.e("MainNavGraph", "Connection timeout")
                 // Let ControlScreen handle timeout navigation
             }
-            is ControlViewModel.ConnectionState.Failed -> {
+            is ConnectionState.Failed -> {
                 Log.e("MainNavGraph", "Connection failed: ${currentConnectionState.error}")
                 // Let ControlScreen handle failures
             }

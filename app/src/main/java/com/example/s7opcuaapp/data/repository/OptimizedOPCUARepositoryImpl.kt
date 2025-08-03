@@ -3,10 +3,10 @@ package com.example.s7opcuaapp.data.repository
 import android.util.Log
 import com.example.s7opcuaapp.data.buffer.PlcDataBuffer
 import com.example.s7opcuaapp.data.local.AppDatabase
+import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.opcua.OPCUAClientManager
-import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import com.example.s7opcuaapp.util.LoadingTracker
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import kotlinx.coroutines.*
@@ -20,13 +20,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
- * Optimized OPC UA Repository with buffer and performance improvements
+ * ✅ Fixed: Remove DeviceEntity from constructor injection
+ * Load device from PrefsManager instead
  */
 class OptimizedOPCUARepositoryImpl @Inject constructor(
-    private var device: DeviceEntity,
     private val database: AppDatabase,
     private val dataBuffer: PlcDataBuffer,
-    private val performanceMonitor: PerformanceMonitor
+    private val performanceMonitor: PerformanceMonitor,
+    private val prefsManager: PrefsManager // ✅ Add PrefsManager
 ) : S7Repository {
 
     companion object {
@@ -34,6 +35,9 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         private var activeInstance: OptimizedOPCUARepositoryImpl? = null
         private val instanceLock = Any()
     }
+
+    // ✅ Load device when needed instead of injecting
+    private var currentDevice: DeviceEntity? = null
 
     // Use buffer's flow instead of creating our own
     override fun observePlcData(): Flow<PlcData> = dataBuffer.dataFlow
@@ -66,14 +70,11 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val totalNodes = boolNodeIds.size + intNodeIds.size
     private val loadingTracker = LoadingTracker<String>(totalNodes)
 
-    private val _uiState = MutableStateFlow(ControlUiState())
-
     private val connectionLostScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
         // Cancel previous instance if exists
         synchronized(instanceLock) {
-            // Stop previous instance if exists
             activeInstance?.let {
                 Log.d("OPCUARepo", "⚠️ Stopping previous instance")
                 runBlocking {
@@ -88,15 +89,15 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val subscriptionGroups = mapOf(
         "critical" to SubscriptionGroup(
             nodeIds = listOf("ns=4;i=7", "ns=4;i=14"), // Power, E-Stop
-            samplingInterval = 250  // Tăng từ 100ms lên 250ms
+            samplingInterval = 250
         ),
         "movement" to SubscriptionGroup(
             nodeIds = listOf("ns=4;i=3", "ns=4;i=4", "ns=4;i=5", "ns=4;i=6"),
-            samplingInterval = 500  // Tăng từ 250ms lên 500ms
+            samplingInterval = 500
         ),
         "status" to SubscriptionGroup(
             nodeIds = boolNodeIds.filter { it !in listOf("ns=4;i=7", "ns=4;i=14", "ns=4;i=3", "ns=4;i=4", "ns=4;i=5", "ns=4;i=6") } + intNodeIds,
-            samplingInterval = 1000  // Tăng từ 500ms lên 1000ms
+            samplingInterval = 1000
         )
     )
 
@@ -106,11 +107,33 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     )
 
     /**
+     * ✅ Load current device from preferences
+     */
+    private fun loadCurrentDevice(): DeviceEntity? {
+        return prefsManager.getCurrentDevice().also { device ->
+            currentDevice = device
+            if (device != null) {
+                Log.d("OPCUARepo", "Loaded device: ${device.name} (${device.ipAddress}:${device.port})")
+            } else {
+                Log.w("OPCUARepo", "No device configured in preferences")
+            }
+        }
+    }
+
+    /**
      * Start connection with improved error handling
      */
     suspend fun start() = connectionMutex.withLock {
         if (isStarted.get()) {
             Log.d("OPCUARepo", "⚠️ Repository already started")
+            return@withLock
+        }
+
+        // ✅ Load device from preferences
+        val device = loadCurrentDevice()
+        if (device == null) {
+            Log.e("OPCUARepo", "❌ Cannot start: No device configured")
+            loadingTracker.setError()
             return@withLock
         }
 
@@ -187,6 +210,14 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         while (isStarted.get() && repositoryScope.isActive) {
             try {
                 if (!isConnected.get()) {
+                    // ✅ Check device is still available
+                    val device = currentDevice ?: loadCurrentDevice()
+                    if (device == null) {
+                        Log.e("OPCUARepo", "❌ No device available for connection")
+                        loadingTracker.setError()
+                        break
+                    }
+
                     // Rate limiting
                     val timeSinceLastAttempt = System.currentTimeMillis() - lastConnectionAttempt
                     if (timeSinceLastAttempt < minConnectionInterval) {
@@ -200,7 +231,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                     performCleanup(consecutiveFailures)
 
                     // Connect
-                    val connected = connectToServer()
+                    val connected = connectToServer(device)
 
                     if (connected) {
                         consecutiveFailures = 0
@@ -216,10 +247,8 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                     } else {
                         consecutiveFailures++
 
-
                         if (consecutiveFailures >= maxConsecutiveFailures) {
                             Log.e("OPCUARepo", "💥 Max failures reached, stopping")
-                            // Set loading percent to -1 to indicate error
                             loadingTracker.setError()
                             break
                         }
@@ -275,9 +304,9 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     }
 
     /**
-     * Connect to server
+     * ✅ Connect to server using device parameter
      */
-    private suspend fun connectToServer(): Boolean {
+    private suspend fun connectToServer(device: DeviceEntity): Boolean {
         return try {
             // Set callback để nhận thông báo khi mất kết nối
             OPCUAClientManager.setConnectionLostCallback {
@@ -321,7 +350,6 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         isConnected.set(false)
         loadingTracker.setError()
     }
-
 
     /**
      * Subscribe with grouped sampling intervals
@@ -400,6 +428,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             Log.w("OPCUARepo", "Error handling update for $nodeId", e)
         }
     }
+
     /**
      * Write boolean with performance tracking
      */
@@ -507,13 +536,15 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         }
     }
 
-
     /**
-     * Update device configuration
+     * ✅ Update device configuration
      */
     override fun updateDevice(device: DeviceEntity) {
         Log.d("OPCUARepo", "📱 Updating device: ${device.name}")
-        this.device = device
+        currentDevice = device
+
+        // Save to preferences
+        prefsManager.setCurrentDevice(device)
 
         // Don't auto-restart here, let ViewModel handle it
         if (isStarted.get()) {
