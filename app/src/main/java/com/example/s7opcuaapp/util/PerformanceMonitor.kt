@@ -12,7 +12,7 @@ import javax.inject.Singleton
 
 /**
  * Performance monitoring utility to track app performance metrics
- * Fixed version with proper lifecycle management
+ * Fixed version with proper lifecycle management and no memory leaks
  */
 @Singleton
 class PerformanceMonitor @Inject constructor() {
@@ -21,18 +21,13 @@ class PerformanceMonitor @Inject constructor() {
     private val _performanceReport = MutableStateFlow(PerformanceReport())
     val performanceReport: StateFlow<PerformanceReport> = _performanceReport
 
-    // Managed coroutine scope
-    private val monitorScope = CoroutineScope(
-        Dispatchers.Default + SupervisorJob() +
-                CoroutineName("PerformanceMonitor")
-    )
-
-    // Cleanup job reference
+    // Managed coroutine scope with proper cancellation
+    private var monitorScope: CoroutineScope? = null
     private var cleanupJob: Job? = null
 
     // Flag to track if monitor is active
     @Volatile
-    private var isMonitorActive = true
+    private var isMonitorActive = false
 
     enum class MetricType {
         PLC_UPDATE_RATE,
@@ -108,14 +103,59 @@ class PerformanceMonitor @Inject constructor() {
             metrics[type] = MetricData()
         }
 
-        // Start cleanup job with proper scope
+        // Start monitoring
+        start()
+    }
+
+    /**
+     * Start monitoring with proper scope management
+     */
+    fun start() {
+        if (isMonitorActive) {
+            Log.d("PerformanceMonitor", "Already active")
+            return
+        }
+
+        isMonitorActive = true
+
+        // Create new scope for this session
+        monitorScope = CoroutineScope(
+            Dispatchers.Default +
+                    SupervisorJob() +
+                    CoroutineName("PerformanceMonitor")
+        )
+
+        // Start cleanup job
         startCleanupJob()
+
+        Log.d("PerformanceMonitor", "Started monitoring")
+    }
+
+    /**
+     * Stop monitoring and cleanup resources
+     */
+    fun stop() {
+        Log.d("PerformanceMonitor", "Stopping performance monitoring")
+
+        isMonitorActive = false
+
+        // Cancel cleanup job
+        cleanupJob?.cancel()
+        cleanupJob = null
+
+        // Cancel and cleanup scope
+        monitorScope?.cancel()
+        monitorScope = null
+
+        Log.d("PerformanceMonitor", "Stopped monitoring")
     }
 
     private fun startCleanupJob() {
         cleanupJob?.cancel() // Cancel any existing job
 
-        cleanupJob = monitorScope.launch {
+        val scope = monitorScope ?: return
+
+        cleanupJob = scope.launch {
             Log.d("PerformanceMonitor", "Cleanup job started")
 
             while (isMonitorActive && isActive) {
@@ -275,7 +315,13 @@ class PerformanceMonitor @Inject constructor() {
      */
     fun resume() {
         Log.d("PerformanceMonitor", "Resuming performance monitoring")
-        isMonitorActive = true
+
+        if (monitorScope == null || !monitorScope!!.isActive) {
+            // Restart if scope was cancelled
+            start()
+        } else {
+            isMonitorActive = true
+        }
     }
 
     /**
@@ -284,14 +330,8 @@ class PerformanceMonitor @Inject constructor() {
     fun cleanup() {
         Log.d("PerformanceMonitor", "Cleaning up PerformanceMonitor")
 
-        isMonitorActive = false
-
-        // Cancel cleanup job
-        cleanupJob?.cancel()
-        cleanupJob = null
-
-        // Cancel entire scope
-        monitorScope.cancel()
+        // Stop monitoring
+        stop()
 
         // Clear all metrics
         metrics.clear()
@@ -305,7 +345,7 @@ class PerformanceMonitor @Inject constructor() {
     /**
      * Check if monitor is active
      */
-    fun isActive(): Boolean = isMonitorActive && monitorScope.isActive
+    fun isActive(): Boolean = isMonitorActive && (monitorScope?.isActive == true)
 }
 
 private fun Double.format(decimals: Int): String = "%.${decimals}f".format(this)

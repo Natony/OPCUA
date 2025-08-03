@@ -109,26 +109,34 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     // Testing
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    // Testing (Unit Tests)
+    // 1) JUnit 4
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("androidx.arch.core:core-testing:2.2.0")
-    testImplementation("org.mockito:mockito-core:5.3.1")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.0.0")
 
-    // Testing (Instrumented Tests)
+    // 2) AndroidX Test core & ext
+    testImplementation("androidx.test:core:1.5.0")                   // for ApplicationProvider, etc.
+    androidTestImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")              // for @RunWith(AndroidJUnit4::class)
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+
+    // 3) Hilt Android Testing
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.51.1")
+    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.51.1")
+
+    // 4) Room Testing
+    testImplementation("androidx.room:room-testing:2.6.1")
+
+    // 5) MockK
+    testImplementation("io.mockk:mockk:1.13.5")
+
+    // 6) Coroutines Test
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
+    // 7) Architecture Components Testing (InstantTaskExecutorRule)
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+
+    // 8) Espresso & Compose UI Tests (if you use Android instrumented Compose tests)
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
 }
 
