@@ -75,11 +75,12 @@ class ConnectionManagerImpl @Inject constructor(
                 // Start connection
                 repository.start()
 
-                // Monitor loading progress WITHOUT timeout on the flow
+                // Monitor loading progress
                 launch {
                     repository.observeLoadingPercent()
                         .collect { percent ->
                             _loadingProgress.value = percent
+                            Log.d(TAG, "Loading progress: $percent%")
 
                             when (percent) {
                                 100 -> {
@@ -94,6 +95,16 @@ class ConnectionManagerImpl @Inject constructor(
                                 }
                             }
                         }
+                }
+
+                // Force completion after timeout if stuck
+                launch {
+                    delay(5000) // Wait 5 seconds
+                    if (_connectionState.value is ConnectionState.Connecting && repository.isConnected()) {
+                        Log.w(TAG, "Force completing connection")
+                        _loadingProgress.value = 100
+                        _connectionState.value = ConnectionState.Connected
+                    }
                 }
 
                 // Separate timeout monitoring

@@ -395,10 +395,14 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         Log.d("OPCUARepo", "🎯 Created $totalSubscriptions subscriptions")
 
         // IMPORTANT: Ensure loading is complete
-        if (loadingTracker.isComplete) {
-            // Force emit 100% to clear any loading state
-            loadingTracker.markLoaded("completion")
+        if (totalSubscriptions > 0) {
+            // Force set 100% để UI hiển thị
+            repeat(totalNodes - loadingTracker.loadedCount) {
+                loadingTracker.markLoaded("force_complete_$it")
+            }
         }
+
+        Log.d("OPCUARepo", "📊 Loading complete: ${loadingTracker.percent.value}%")
     }
 
     /**

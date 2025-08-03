@@ -84,6 +84,7 @@ class ControlCoordinatorImpl @Inject constructor(
         // Monitor connection state and manage data sync
         scope.launch {
             connectionState.collect { state ->
+                Log.d(TAG, "Connection state changed: $state")
                 when (state) {
                     is ConnectionState.Connected -> {
                         Log.d(TAG, "Connected - starting data sync")
@@ -94,6 +95,12 @@ class ControlCoordinatorImpl @Inject constructor(
                         dataSyncManager.stopDataSync()
                     }
                 }
+            }
+        }
+
+        scope.launch {
+            stateManager.plcData.collect { data ->
+                Log.d(TAG, "PLC data updated: bools=${data.bools.size}, ints=${data.ints.size}")
             }
         }
     }

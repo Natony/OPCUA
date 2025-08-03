@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.delay
 import android.util.Log
+import androidx.compose.ui.Alignment
 import com.example.s7opcuaapp.domain.connection.ConnectionState
 import com.example.s7opcuaapp.ui.components.MainControlContent
 import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
@@ -41,6 +42,11 @@ fun ControlScreen(
     var timeoutCountdown by remember { mutableStateOf(10) }
     var preventAutoDismiss by remember { mutableStateOf(false) }
     var shouldMonitorTimeout by remember { mutableStateOf(true) }
+
+    LaunchedEffect(connectionState, uiState.loadingPercent) {
+        Log.d("ControlScreen", "ConnectionState: $connectionState, LoadingPercent: ${uiState.loadingPercent}")
+    }
+
     // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
         when (connectionState) {
@@ -162,8 +168,21 @@ fun ControlScreen(
                 onReleaseButton = onReleaseButton,
                 onRetryConnection = onRetryConnection
             )
+        }else {
+            // Thêm placeholder khi không hiển thị main UI
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Waiting for data...")
+                    Text("State: $connectionState")
+                    Text("Loading: ${uiState.loadingPercent}%")
+                }
+            }
         }
-
         // Connection state overlays
         if (connectionState !is ConnectionState.Offline) {
             ConnectionStateOverlay(

@@ -196,6 +196,8 @@ class PlcDataBuffer @Inject constructor(
 
             // Emit data
             _dataFlow.emit(newData)
+
+            Log.d("PlcDataBuffer", "Emitted data: bools=${newData.bools.size}, ints=${newData.ints.size}")
         } else {
             // Data hasn't changed, just reset pending flag
             pendingEmit.set(false)
