@@ -33,8 +33,12 @@ class PlcDataBuffer @Inject constructor(
     private val pendingEmit = AtomicBoolean(false)
 
     // Configuration - INCREASED VALUES
-    private val MIN_EMIT_INTERVAL = 1000L // Increased from 500ms to 1000ms
-    private val BATCH_DELAY = 250L // Increased from 100ms to 250ms
+    private val MIN_EMIT_INTERVAL = 2000L // Increased from 1000ms to 2000ms
+    private val BATCH_DELAY = 500L // Increased from 250ms to 500ms
+    private val MAX_UPDATES_PER_SECOND = 2
+
+    private val lastUpdateTimes = ConcurrentHashMap<Int, Long>()
+    private val UPDATE_RATE_LIMIT = 100L // Min time between updates for same index
 
     // Output flow
     private val _dataFlow = MutableSharedFlow<PlcData>(
@@ -71,6 +75,14 @@ class PlcDataBuffer @Inject constructor(
      * Update boolean value in buffer
      */
     fun updateBool(index: Int, value: Boolean) {
+        // Rate limit per index
+        val now = System.currentTimeMillis()
+        val lastUpdate = lastUpdateTimes[index] ?: 0
+        if (now - lastUpdate < UPDATE_RATE_LIMIT) {
+            return // Skip update if too frequent
+        }
+        lastUpdateTimes[index] = now
+
         val previousValue = boolBuffer[index]
         if (previousValue != value) {
             boolBuffer[index] = value
@@ -143,6 +155,15 @@ class PlcDataBuffer @Inject constructor(
      * Emit buffered data with redundancy check
      */
     private suspend fun emitData() {
+        // Add rate limiting
+        val now = System.currentTimeMillis()
+        val timeSinceLastEmit = now - lastEmitTime.get()
+
+        // Enforce minimum interval even for critical updates
+        if (timeSinceLastEmit < MIN_EMIT_INTERVAL / 2) {
+            delay(MIN_EMIT_INTERVAL / 2 - timeSinceLastEmit)
+        }
+
         if (!hasChanges()) {
             pendingEmit.set(false)
             return
@@ -159,31 +180,37 @@ class PlcDataBuffer @Inject constructor(
 
         // Only emit if data is actually different
         if (newData != lastEmittedData) {
-            lastEmittedData = newData
+            // Move heavy operations off main thread
+            withContext(Dispatchers.Default) {
+                lastEmittedData = newData
 
-            // Clear change flags
-            boolChanged.clear()
-            intChanged.clear()
+                // Clear change flags
+                boolChanged.clear()
+                intChanged.clear()
 
-            // Update timing
-            lastEmitTime.set(System.currentTimeMillis())
-            pendingEmit.set(false)
+                // Update timing
+                lastEmitTime.set(System.currentTimeMillis())
+                pendingEmit.set(false)
 
-            // Record performance metric
-            performanceMonitor.recordPlcUpdate()
+                // Record performance metric
+                performanceMonitor.recordPlcUpdate()
 
-            // Track update rate for debugging
-            updateCount++
-            val now = System.currentTimeMillis()
-            if (now - lastLogTime >= 5000) { // Log every 5 seconds
-                val rate = updateCount * 1000.0 / (now - lastLogTime)
-                Log.d("PlcDataBuffer", "Update rate: ${String.format("%.1f", rate)}/s, Total changes: ${boolChanged.size + intChanged.size}")
-                updateCount = 0
-                lastLogTime = now
+                // Track update rate for debugging
+                updateCount++
+                if (now - lastLogTime >= 5000) { // Log every 5 seconds
+                    val rate = updateCount * 1000.0 / (now - lastLogTime)
+                    if (rate > MAX_UPDATES_PER_SECOND * 2) {
+                        Log.w("PlcDataBuffer", "Update rate too high: ${String.format("%.1f", rate)}/s")
+                    }
+                    updateCount = 0
+                    lastLogTime = now
+                }
             }
 
-            // Emit data
-            _dataFlow.emit(newData)
+            // Emit on IO dispatcher to avoid blocking main thread
+            withContext(Dispatchers.IO) {
+                _dataFlow.emit(newData)
+            }
         } else {
             // Data hasn't changed, just reset pending flag
             pendingEmit.set(false)
