@@ -278,8 +278,11 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                 }
 
                 delay(5000)
+
             }
+
         }
+
     }
 
     /**
@@ -385,10 +388,17 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                     Log.e("OPCUARepo", "Failed to subscribe $nodeId", e)
                 }
             }
+
         }
 
         performanceMonitor.updateSubscriptionCount(totalSubscriptions)
         Log.d("OPCUARepo", "🎯 Created $totalSubscriptions subscriptions")
+
+        // IMPORTANT: Ensure loading is complete
+        if (loadingTracker.isComplete) {
+            // Force emit 100% to clear any loading state
+            loadingTracker.markLoaded("completion")
+        }
     }
 
     /**

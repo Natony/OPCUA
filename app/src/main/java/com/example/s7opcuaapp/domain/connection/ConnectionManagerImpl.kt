@@ -44,7 +44,7 @@ class ConnectionManagerImpl @Inject constructor(
         private const val MAX_RETRIES = 3
         private const val RETRY_DELAY = 2000L
         private const val MONITOR_INTERVAL = 5000L
-        private const val CONNECTION_TIMEOUT = 15000L
+        private const val CONNECTION_TIMEOUT = 30000L
     }
 
     override suspend fun connect(device: DeviceEntity): Result<Unit> = connectionMutex.withLock {
@@ -72,11 +72,11 @@ class ConnectionManagerImpl @Inject constructor(
                 // Update repository with device
                 repository.updateDevice(device)
 
-                // Start connection with timeout
-                withTimeout(CONNECTION_TIMEOUT) {
-                    repository.start()
+                // Start connection
+                repository.start()
 
-                    // Monitor loading progress
+                // Monitor loading progress WITHOUT timeout on the flow
+                launch {
                     repository.observeLoadingPercent()
                         .collect { percent ->
                             _loadingProgress.value = percent
@@ -88,11 +88,32 @@ class ConnectionManagerImpl @Inject constructor(
                                     startConnectionMonitoring()
                                 }
                                 -1 -> {
-                                    throw Exception("Connection error from repository")
+                                    if (_connectionState.value !is ConnectionState.Connected) {
+                                        handleConnectionError(Exception("Connection error from repository"))
+                                    }
                                 }
                             }
                         }
                 }
+
+                // Separate timeout monitoring
+                withTimeout(CONNECTION_TIMEOUT) {
+                    // Wait for connection state to change
+                    while (_connectionState.value is ConnectionState.Connecting) {
+                        delay(100)
+
+                        // Check if repository is connected
+                        if (repository.isConnected()) {
+                            // Force update if loading tracker is slow
+                            if (_loadingProgress.value < 100) {
+                                _loadingProgress.value = 100
+                            }
+                            _connectionState.value = ConnectionState.Connected
+                            break
+                        }
+                    }
+                }
+
             } catch (e: TimeoutCancellationException) {
                 handleTimeout()
             } catch (e: Exception) {

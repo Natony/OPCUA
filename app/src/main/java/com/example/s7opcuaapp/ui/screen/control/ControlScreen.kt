@@ -11,6 +11,9 @@ import com.example.s7opcuaapp.domain.connection.ConnectionState
 import com.example.s7opcuaapp.ui.components.MainControlContent
 import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
 import com.example.s7opcuaapp.ui.components.TimeoutDialog
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 @Composable
 fun ControlScreen(
@@ -37,35 +40,42 @@ fun ControlScreen(
     var showTimeoutDialog by remember { mutableStateOf(false) }
     var timeoutCountdown by remember { mutableStateOf(10) }
     var preventAutoDismiss by remember { mutableStateOf(false) }
-
+    var shouldMonitorTimeout by remember { mutableStateOf(true) }
     // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
         when (connectionState) {
+            is ConnectionState.Connected -> {
+                // IMPORTANT: Clear timeout monitoring when connected
+                shouldMonitorTimeout = false
+                showTimeoutDialog = false
+                Log.d("ControlScreen", "Connected - clearing timeout monitoring")
+            }
+
             is ConnectionState.Timeout,
             is ConnectionState.MaxRetriesExceeded -> {
-                Log.d("ControlScreen", "Connection timeout/max retries detected")
-                showTimeoutDialog = true
-                timeoutCountdown = 10
-                preventAutoDismiss = false
+                if (shouldMonitorTimeout) {
+                    Log.d("ControlScreen", "Connection timeout/max retries detected")
+                    showTimeoutDialog = true
+                    timeoutCountdown = 10
+                    preventAutoDismiss = false
 
-                // Notify ViewModel that timeout dialog is showing
-                onDismissTimeoutDialog() // This will disable auto-retry
+                    onDismissTimeoutDialog()
 
-                // Start countdown
-                while (timeoutCountdown > 0 && showTimeoutDialog && !preventAutoDismiss) {
-                    delay(1000)
-                    timeoutCountdown--
-                }
+                    while (timeoutCountdown > 0 && showTimeoutDialog && !preventAutoDismiss) {
+                        delay(1000)
+                        timeoutCountdown--
+                    }
 
-                // Navigate to config after countdown if not dismissed
-                if (showTimeoutDialog && !preventAutoDismiss) {
-                    onNavigateToConfig()
+                    if (showTimeoutDialog && !preventAutoDismiss) {
+                        onNavigateToConfig()
+                    }
                 }
             }
+
             is ConnectionState.Failed -> {
-                // For critical failures, show timeout dialog
-                if (connectionState.error.contains("timeout", ignoreCase = true) ||
-                    connectionState.error.contains("max failures", ignoreCase = true)) {
+                if (shouldMonitorTimeout &&
+                    (connectionState.error.contains("timeout", ignoreCase = true) ||
+                            connectionState.error.contains("max failures", ignoreCase = true))) {
                     showTimeoutDialog = true
                     timeoutCountdown = 10
                     preventAutoDismiss = true
@@ -80,8 +90,13 @@ fun ControlScreen(
                     }
                 }
             }
+
+            is ConnectionState.Connecting -> {
+                // Reset monitoring when starting new connection
+                shouldMonitorTimeout = true
+            }
+
             else -> {
-                // Clear timeout dialog for other states
                 showTimeoutDialog = false
             }
         }
@@ -89,16 +104,40 @@ fun ControlScreen(
 
     // Safety mechanism for stuck loading
     LaunchedEffect(connectionState, uiState.loadingPercent) {
-        if (connectionState is ConnectionState.Connecting &&
+        // Only monitor if we should and if still connecting
+        if (shouldMonitorTimeout &&
+            connectionState is ConnectionState.Connecting &&
             uiState.loadingPercent in 1..99) {
-            delay(30000) // 30 seconds timeout
-            if (connectionState is ConnectionState.Connecting &&
-                uiState.loadingPercent in 1..99) {
-                Log.e("ControlScreen", "Loading stuck after 30 seconds")
-                showTimeoutDialog = true
+
+            // Start a timeout job
+            val timeoutJob = launch {
+                delay(30000L) // 30 seconds timeout
+
+                // Check again after delay - IMPORTANT!
+                if (shouldMonitorTimeout &&
+                    connectionState is ConnectionState.Connecting &&
+                    uiState.loadingPercent in 1..99) {
+                    Log.e("ControlScreen", "Loading stuck after 30 seconds")
+                    showTimeoutDialog = true
+                }
+            }
+
+            // Cancel timeout if state changes
+            try {
+                // Wait for state to change
+                snapshotFlow { connectionState }
+                    .filter { it !is ConnectionState.Connecting }
+                    .first()
+
+                // State changed, cancel timeout
+                timeoutJob.cancel()
+                Log.d("ControlScreen", "Cancelled timeout monitoring - state changed")
+            } catch (e: CancellationException) {
+                timeoutJob.cancel()
             }
         }
     }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Main UI - Show when connected and data loaded
         val showMainUI =

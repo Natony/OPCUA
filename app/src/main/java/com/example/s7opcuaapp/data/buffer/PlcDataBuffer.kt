@@ -155,15 +155,6 @@ class PlcDataBuffer @Inject constructor(
      * Emit buffered data with redundancy check
      */
     private suspend fun emitData() {
-        // Add rate limiting
-        val now = System.currentTimeMillis()
-        val timeSinceLastEmit = now - lastEmitTime.get()
-
-        // Enforce minimum interval even for critical updates
-        if (timeSinceLastEmit < MIN_EMIT_INTERVAL / 2) {
-            delay(MIN_EMIT_INTERVAL / 2 - timeSinceLastEmit)
-        }
-
         if (!hasChanges()) {
             pendingEmit.set(false)
             return
@@ -180,37 +171,31 @@ class PlcDataBuffer @Inject constructor(
 
         // Only emit if data is actually different
         if (newData != lastEmittedData) {
-            // Move heavy operations off main thread
-            withContext(Dispatchers.Default) {
-                lastEmittedData = newData
+            lastEmittedData = newData
 
-                // Clear change flags
-                boolChanged.clear()
-                intChanged.clear()
+            // Clear change flags
+            boolChanged.clear()
+            intChanged.clear()
 
-                // Update timing
-                lastEmitTime.set(System.currentTimeMillis())
-                pendingEmit.set(false)
+            // Update timing
+            lastEmitTime.set(System.currentTimeMillis())
+            pendingEmit.set(false)
 
-                // Record performance metric
-                performanceMonitor.recordPlcUpdate()
+            // Record performance metric
+            performanceMonitor.recordPlcUpdate()
 
-                // Track update rate for debugging
-                updateCount++
-                if (now - lastLogTime >= 5000) { // Log every 5 seconds
-                    val rate = updateCount * 1000.0 / (now - lastLogTime)
-                    if (rate > MAX_UPDATES_PER_SECOND * 2) {
-                        Log.w("PlcDataBuffer", "Update rate too high: ${String.format("%.1f", rate)}/s")
-                    }
-                    updateCount = 0
-                    lastLogTime = now
-                }
+            // Track update rate for debugging
+            updateCount++
+            val now = System.currentTimeMillis()
+            if (now - lastLogTime >= 5000) { // Log every 5 seconds
+                val rate = updateCount * 1000.0 / (now - lastLogTime)
+                Log.d("PlcDataBuffer", "Update rate: ${String.format("%.1f", rate)}/s, Total changes: ${boolChanged.size + intChanged.size}")
+                updateCount = 0
+                lastLogTime = now
             }
 
-            // Emit on IO dispatcher to avoid blocking main thread
-            withContext(Dispatchers.IO) {
-                _dataFlow.emit(newData)
-            }
+            // Emit data
+            _dataFlow.emit(newData)
         } else {
             // Data hasn't changed, just reset pending flag
             pendingEmit.set(false)
