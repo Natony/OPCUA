@@ -5,6 +5,7 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
@@ -12,7 +13,7 @@ import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.UserRole
 import com.example.s7opcuaapp.data.repository.UserRepository
 import com.example.s7opcuaapp.ui.navigation.RootNavHost
-import com.example.s7opcuaapp.ui.theme.S7Theme
+import com.example.s7opcuaapp.ui.theme.S7OpcUaTheme // Sửa: Import đúng tên theme
 import com.example.s7opcuaapp.util.PasswordUtils
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import com.example.s7opcuaapp.util.SessionManager
@@ -50,28 +51,33 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            S7Theme {
-                val navController = rememberNavController()
-
-                // Check for existing session
-                LaunchedEffect(Unit) {
-                    if (sessionManager.validateSession()) {
-                        // Session valid, check if device selected
-                        if (prefsManager.getCurrentDevice() != null) {
-                            navController.navigate("main") {
-                                popUpTo("login") { inclusive = true }
-                            }
-                        } else {
-                            navController.navigate("config_select") {
-                                popUpTo("login") { inclusive = true }
-                            }
-                        }
-                    }
-                }
-
-                RootNavHost(navController = navController)
+            S7OpcUaTheme { // Sửa: Dùng đúng tên theme
+                AppContent()
             }
         }
+    }
+
+    @Composable
+    private fun AppContent() {
+        val navController = rememberNavController()
+
+        // Check for existing session
+        LaunchedEffect(Unit) {
+            if (sessionManager.validateSession()) {
+                // Session valid, check if device selected
+                if (prefsManager.getCurrentDevice() != null) {
+                    navController.navigate("main") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                } else {
+                    navController.navigate("config_select") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                }
+            }
+        }
+
+        RootNavHost(navController = navController)
     }
 
     private suspend fun initializeDefaultAdmin() {
@@ -104,7 +110,7 @@ class MainActivity : ComponentActivity() {
                         println("   Active: ${user.isActive}")
 
                         // Verify bằng cách thử authenticate
-                        val authResult = userRepository.authenticate("admin", "123456")
+                        val authResult = userRepository.authenticate("admin", plainPassword)
                         authResult.fold(
                             onSuccess = { authUser ->
                                 println("✅ Admin account verification successful")

@@ -9,7 +9,6 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -23,7 +22,9 @@ class ButtonValidatorTest : BaseUnitTest() {
 
     private val plcDataFlow = MutableStateFlow(PlcData.empty())
 
-    override fun onSetUp() {
+    override fun setUp() {  // Sửa: onSetUp -> setUp
+        super.setUp()
+
         stateManager = mockk {
             every { plcData } returns plcDataFlow
             every { isOfflineMode() } returns false
@@ -42,7 +43,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateButtonPress should fail in offline mode`() = runTest {
+    fun testValidateButtonPressFailsInOfflineMode() = runBlockingTest { // Sửa: Bỏ backticks, dùng runBlockingTest
         // Given
         every { stateManager.isOfflineMode() } returns true
 
@@ -55,7 +56,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateButtonPress should fail when button locked by status`() = runTest {
+    fun testValidateButtonPressFailsWhenButtonLockedByStatus() = runBlockingTest {
         // Given
         val buttonIndex = 5
         every { statusLockConfig.getLockedButtonsForStatus(0) } returns setOf(buttonIndex)
@@ -69,7 +70,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateButtonPress should fail when button locked by group`() = runTest {
+    fun testValidateButtonPressFailsWhenButtonLockedByGroup() = runBlockingTest {
         // Given
         val buttonIndex = 2
         val activeButtons = setOf(1)
@@ -84,7 +85,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateButtonPress should fail when another manual button is pressed`() = runTest {
+    fun testValidateButtonPressFailsWhenAnotherManualButtonPressed() = runBlockingTest {
         // Given
         val buttonIndex = 0 // Manual forward
         val activeButtons = setOf(1) // Manual reverse already pressed
@@ -98,7 +99,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateButtonPress should succeed when valid`() = runTest {
+    fun testValidateButtonPressSucceedsWhenValid() = runBlockingTest {
         // Given
         val buttonIndex = 4 // Power button
         val activeButtons = emptySet<Int>()
@@ -111,7 +112,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateIntegerWrite should fail in offline mode`() = runTest {
+    fun testValidateIntegerWriteFailsInOfflineMode() = runBlockingTest {
         // Given
         every { stateManager.isOfflineMode() } returns true
 
@@ -124,7 +125,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateIntegerWrite should fail when value out of range`() = runTest {
+    fun testValidateIntegerWriteFailsWhenValueOutOfRange() = runBlockingTest {
         // Given
         val index = 3 // Pallet count (0-999)
         val value = 1500 // Out of range
@@ -138,7 +139,7 @@ class ButtonValidatorTest : BaseUnitTest() {
     }
 
     @Test
-    fun `validateIntegerWrite should succeed when value in range`() = runTest {
+    fun testValidateIntegerWriteSucceedsWhenValueInRange() = runBlockingTest {
         // Given
         val index = 5 // Coordinate (-9999 to 9999)
         val value = -500
