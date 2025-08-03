@@ -66,9 +66,9 @@ object OPCUAClientManager {
     /**
      * Handle connection lost
      */
-    private fun handleConnectionLost(reason: String) {
+    private fun handleConnectionLost() {
         if (!isConnectionLost.getAndSet(true)) {
-            Log.e("OPCUAClient", "🔌 CONNECTION LOST: $reason")
+            Log.e("OPCUAClient", "🔌 CONNECTION LOST")
             connectionLostCallback?.invoke()
         }
     }
@@ -83,7 +83,21 @@ object OPCUAClientManager {
                 delay(3000) // Check every 3 seconds
 
                 try {
-                    // Check if we have recent data
+                    // Kiểm tra client và session
+                    val clientExists = client != null
+                    val hasSession = try {
+                        client?.session != null
+                    } catch (e: Exception) {
+                        false
+                    }
+
+                    if (clientExists && !hasSession) {
+                        Log.w("OPCUAClient", "Client exists but no session!")
+                        handleConnectionLost()
+                        continue
+                    }
+
+                    // Check data timeout
                     val now = System.currentTimeMillis()
                     val hasRecentData = lastDataReceived.values.any {
                         (now - it) < DATA_TIMEOUT
@@ -94,7 +108,7 @@ object OPCUAClientManager {
 
                         // Try health check
                         if (!performHealthCheck()) {
-                            handleConnectionLost("No data received and health check failed")
+                            handleConnectionLost()
                         }
                     }
                 } catch (e: Exception) {
@@ -110,19 +124,26 @@ object OPCUAClientManager {
     private suspend fun performHealthCheck(): Boolean = withContext(Dispatchers.IO) {
         try {
             client?.let { cli ->
+                // Kiểm tra bằng cách đọc server state
                 val future = cli.readValue(
                     0.0,
                     TimestampsToReturn.Neither,
                     Identifiers.Server_ServerStatus_State
                 )
 
-                withTimeoutOrNull(2000L) {
-                    future.get()
-                    true
-                } ?: false
+                try {
+                    withTimeoutOrNull(2000L) {
+                        val dataValue = future.get(2000, TimeUnit.MILLISECONDS)
+                        // Nếu đọc được và status OK thì connection còn tốt
+                        dataValue?.statusCode?.isGood == true
+                    } ?: false
+                } catch (e: Exception) {
+                    Log.e("OPCUAClient", "Health check read failed", e)
+                    false
+                }
             } ?: false
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "Health check failed", e)
+            Log.e("OPCUAClient", "Health check error", e)
             false
         }
     }
@@ -199,7 +220,7 @@ object OPCUAClientManager {
 
         } catch (e: Exception) {
             Log.e("OPCUAClient", "❌ Connection failed", e)
-            handleConnectionLost("Connect failed: ${e.message}")
+            handleConnectionLost()
             false
         }
     }
@@ -277,7 +298,7 @@ object OPCUAClientManager {
             // Check if it's a connection error
             if (e.message?.contains("Bad_", ignoreCase = true) == true ||
                 e.message?.contains("timeout", ignoreCase = true) == true) {
-                handleConnectionLost("Subscription failed: ${e.message}")
+                handleConnectionLost()
             }
             throw e
         }
@@ -315,7 +336,7 @@ object OPCUAClientManager {
                     if (status.value == StatusCodes.Bad_NotConnected ||
                         status.value == StatusCodes.Bad_ConnectionClosed ||
                         status.value == StatusCodes.Bad_SessionClosed) {
-                        handleConnectionLost("Write failed with connection error: $status")
+                        handleConnectionLost()
                     }
                 }
                 status
@@ -327,7 +348,7 @@ object OPCUAClientManager {
             if (e.message?.contains("Bad_", ignoreCase = true) == true ||
                 e.message?.contains("timeout", ignoreCase = true) == true ||
                 e.message?.contains("connection", ignoreCase = true) == true) {
-                handleConnectionLost("Write failed: ${e.message}")
+                handleConnectionLost()
             }
             null
         }
@@ -364,9 +385,21 @@ object OPCUAClientManager {
 
         return try {
             client?.let { cli ->
-                cli.session != null
+                // Kiểm tra xem client có session không
+                val hasSession = try {
+                    cli.session != null
+                } catch (e: Exception) {
+                    false
+                }
+
+                if (!hasSession) {
+                    Log.w("OPCUAClient", "No active session")
+                }
+
+                hasSession
             } ?: false
         } catch (e: Exception) {
+            Log.e("OPCUAClient", "Error checking connection", e)
             false
         }
     }

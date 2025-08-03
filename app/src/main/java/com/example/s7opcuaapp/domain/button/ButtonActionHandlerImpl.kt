@@ -2,6 +2,7 @@ package com.example.s7opcuaapp.domain.button
 
 import android.util.Log
 import com.example.s7opcuaapp.core.dispatchers.DispatcherProvider
+import com.example.s7opcuaapp.data.repository.OptimizedOPCUARepositoryImpl
 import com.example.s7opcuaapp.data.repository.S7Repository
 import com.example.s7opcuaapp.domain.validation.ButtonValidator
 import kotlinx.coroutines.*
@@ -119,8 +120,13 @@ class ButtonActionHandlerImpl @Inject constructor(
             // Mark as busy
             _busyButtons.value = _busyButtons.value + index
 
-            // Perform toggle
+            // Kiểm tra connection trước khi write
             withContext(dispatchers.io) {
+                // Double check connection
+                if (!repository.isConnected()) {
+                    throw Exception("Not connected to PLC")
+                }
+
                 repository.writeBoolean(index, value)
             }
 
@@ -132,6 +138,15 @@ class ButtonActionHandlerImpl @Inject constructor(
             Result.failure(e)
         } finally {
             _busyButtons.value = _busyButtons.value - index
+        }
+    }
+
+    // Thêm extension function để check connection
+    private suspend fun S7Repository.isConnected(): Boolean {
+        return if (this is OptimizedOPCUARepositoryImpl) {
+            this.isConnected()
+        } else {
+            true // Default for other implementations
         }
     }
 

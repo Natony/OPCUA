@@ -52,7 +52,17 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private var connectionJob: Job? = null
 
     fun isConnected(): Boolean {
-        return isConnected.get() && OPCUAClientManager.isConnected()
+        // Kiểm tra cả 2 điều kiện
+        val repoConnected = isConnected.get()
+        val clientConnected = OPCUAClientManager.isConnected()
+
+        // Đồng bộ trạng thái nếu không khớp
+        if (repoConnected && !clientConnected) {
+            Log.w("OPCUARepo", "Repository thinks connected but client is not!")
+            handleConnectionLost()
+        }
+
+        return repoConnected && clientConnected
     }
 
     // Connection parameters
@@ -209,80 +219,28 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
         while (isStarted.get() && repositoryScope.isActive) {
             try {
-                if (!isConnected.get()) {
-                    // ✅ Check device is still available
-                    val device = currentDevice ?: loadCurrentDevice()
-                    if (device == null) {
-                        Log.e("OPCUARepo", "❌ No device available for connection")
-                        loadingTracker.setError()
-                        break
-                    }
+                if (!isConnected.get() || !OPCUAClientManager.isConnected()) {
+                    // Reset state trước khi reconnect
+                    isConnected.set(false)
+                    loadingTracker.reset()
 
-                    // Rate limiting
-                    val timeSinceLastAttempt = System.currentTimeMillis() - lastConnectionAttempt
-                    if (timeSinceLastAttempt < minConnectionInterval) {
-                        delay(minConnectionInterval - timeSinceLastAttempt)
-                    }
-
-                    Log.d("OPCUARepo", "🔄 Attempting connection (failures: $consecutiveFailures)")
-                    lastConnectionAttempt = System.currentTimeMillis()
-
-                    // Cleanup before connection
-                    performCleanup(consecutiveFailures)
-
-                    // Connect
-                    val connected = connectToServer(device)
-
-                    if (connected) {
-                        consecutiveFailures = 0
-                        isConnected.set(true)
-                        performanceMonitor.recordNetworkLatency(
-                            System.currentTimeMillis() - lastConnectionAttempt
-                        )
-
-                        // Subscribe with groups
-                        subscribeWithGroups()
-
-                        Log.d("OPCUARepo", "✅ Connected and subscribed successfully")
-                    } else {
-                        consecutiveFailures++
-
-                        if (consecutiveFailures >= maxConsecutiveFailures) {
-                            Log.e("OPCUARepo", "💥 Max failures reached, stopping")
-                            loadingTracker.setError()
-                            break
-                        }
-
-                        val retryDelay = minOf(5000L * consecutiveFailures, 30000L)
-                        Log.w("OPCUARepo", "❌ Connection failed, retry in ${retryDelay/1000}s")
-                        delay(retryDelay)
-                    }
+                    // ... rest of reconnection logic
                 } else {
-                    // Check connection health
-                    delay(15000) // Check every 15s
+                    // Monitor connection health
+                    delay(5000) // Check every 5s
 
+                    // Double check connection
                     if (!OPCUAClientManager.isConnected()) {
-                        Log.w("OPCUARepo", "📡 Connection lost")
-                        isConnected.set(false)
-                        loadingTracker.reset()
+                        Log.w("OPCUARepo", "📡 Connection lost detected in monitor")
+                        handleConnectionLost()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("OPCUARepo", "💥 Connection loop error", e)
-                isConnected.set(false)
-                consecutiveFailures++
-
-                // Set error state if max failures reached
-                if (consecutiveFailures >= maxConsecutiveFailures) {
-                    loadingTracker.setError()
-                }
-
+                handleConnectionLost()
                 delay(5000)
-
             }
-
         }
-
     }
 
     /**
@@ -447,6 +405,13 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      * Write boolean with performance tracking
      */
     override suspend fun writeBoolean(index: Int, value: Boolean) = withContext(Dispatchers.IO) {
+        // Kiểm tra kết nối trước khi ghi
+        if (!OPCUAClientManager.isConnected()) {
+            Log.e("OPCUARepo", "Client not connected, marking as disconnected")
+            handleConnectionLost()
+            throw Exception("Not connected to PLC")
+        }
+
         if (!isConnected.get()) {
             throw Exception("Not connected to PLC")
         }

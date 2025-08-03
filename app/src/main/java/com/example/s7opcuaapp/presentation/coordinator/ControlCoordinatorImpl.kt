@@ -130,10 +130,20 @@ class ControlCoordinatorImpl @Inject constructor(
     }
 
     override suspend fun toggleBoolean(index: Int, value: Boolean) {
-        buttonHandler.toggleBoolean(index, value)
-            .onFailure { error ->
-                Log.e(TAG, "Failed to toggle boolean $index", error)
-            }
+        try {
+            buttonHandler.toggleBoolean(index, value)
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to toggle boolean $index", error)
+
+                    // Nếu lỗi là mất kết nối, trigger reconnect
+                    if (error.message?.contains("Not connected") == true) {
+                        connectionManager.resetConnection()
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in toggleBoolean", e)
+            // Prevent crash
+        }
     }
 
     override suspend fun pressButton(index: Int) {
