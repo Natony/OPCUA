@@ -8,7 +8,6 @@ import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.delay
 import android.util.Log
 import com.example.s7opcuaapp.ui.components.MainControlContent
-import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
 import com.example.s7opcuaapp.ui.components.ErrorOverlay
 import com.example.s7opcuaapp.ui.components.LoadingOverlay
 import com.example.s7opcuaapp.ui.components.OfflineOverlay

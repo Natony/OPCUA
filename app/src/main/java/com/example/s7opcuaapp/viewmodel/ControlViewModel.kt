@@ -792,6 +792,21 @@ class ControlViewModel @Inject constructor(
      * Internal thread-safe button press implementation
      */
     private suspend fun performButtonPress(index: Int): Boolean {
+        // Check if in offline mode first
+        if (_connectionState.value is ConnectionState.Offline) {
+            Log.w("ControlVM", "Cannot press button in offline mode")
+            _uiState.update {
+                it.copy(errorMessage = "Controls disabled in offline mode")
+            }
+            return false
+        }
+
+        // Check if connected
+        if (!connectionStarted || _uiState.value.loadingPercent != 100) {
+            Log.w("ControlVM", "Cannot press button - not connected")
+            return false
+        }
+
         // Check if button is already pressed
         val currentState = buttonStates[index]
         if (currentState?.isPressed == true) {
@@ -838,10 +853,23 @@ class ControlViewModel @Inject constructor(
                         Log.d("ControlVM", "✅ Button $index pressed successfully")
                     } catch (e: Exception) {
                         Log.e("ControlVM", "Error pressing button $index", e)
+
                         // Cleanup on error
                         pressedButtons.remove(index)
                         updateButtonStates { it - index }
-                        throw e
+
+                        // Check if connection lost
+                        if (e.message?.contains("Not connected", ignoreCase = true) == true ||
+                            e.message?.contains("connection", ignoreCase = true) == true) {
+                            handleConnectionLost()
+                        } else {
+                            _uiState.update {
+                                it.copy(errorMessage = "Failed to press button: ${e.message}")
+                            }
+                        }
+
+                        // Don't throw - return gracefully
+                        return@launch
                     }
                 }
             )
@@ -854,6 +882,9 @@ class ControlViewModel @Inject constructor(
 
         } catch (e: Exception) {
             Log.e("ControlVM", "Failed to press button $index", e)
+            _uiState.update {
+                it.copy(errorMessage = "Button operation failed: ${e.message}")
+            }
             return false
         } finally {
             globalProcessingMutex.unlock()
