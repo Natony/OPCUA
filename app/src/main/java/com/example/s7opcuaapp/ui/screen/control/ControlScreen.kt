@@ -9,6 +9,8 @@ import kotlinx.coroutines.delay
 import android.util.Log
 import com.example.s7opcuaapp.ui.components.MainControlContent
 import com.example.s7opcuaapp.ui.components.ConnectionStateOverlay
+import com.example.s7opcuaapp.ui.components.ErrorOverlay
+import com.example.s7opcuaapp.ui.components.LoadingOverlay
 import com.example.s7opcuaapp.ui.components.OfflineOverlay
 import com.example.s7opcuaapp.ui.components.TimeoutDialog
 
@@ -101,18 +103,18 @@ fun ControlScreen(
     }
     Box(modifier = Modifier.fillMaxSize()) {
         // Main UI - Show when connected and data loaded
-        val showMainUI = when (connectionState) {
-            is ControlViewModel.ConnectionState.Offline -> true
-            is ControlViewModel.ConnectionState.Connected -> true
-            is ControlViewModel.ConnectionState.Connecting ->
-                uiState.loadingPercent > 0 // Show UI if loading started
-            else -> false
-        }
+//        val showMainUI = when (connectionState) {
+//            is ControlViewModel.ConnectionState.Offline -> true
+//            is ControlViewModel.ConnectionState.Connected -> true
+//            is ControlViewModel.ConnectionState.Connecting ->
+//                uiState.loadingPercent > 0 // Show UI if loading started
+//            else -> false
+//        }
 
-        if (showMainUI) {
-
-            val contentAlpha = if (connectionState is ControlViewModel.ConnectionState.Offline)
-                0.8f else 1f
+//        if (showMainUI) {
+//
+//            val contentAlpha = if (connectionState is ControlViewModel.ConnectionState.Offline)
+//                0.8f else 1f
 
             MainControlContent(
                 uiState = uiState,
@@ -131,22 +133,36 @@ fun ControlScreen(
             )
         }
 
-        if (connectionState is ControlViewModel.ConnectionState.Offline) {
-            OfflineOverlay(
-                onRetryConnection = onRetryConnection,
-                onExitOffline = onNavigateToConfig
-            )
-        }
+        when (connectionState) {
+            is ControlViewModel.ConnectionState.Offline -> {
+                OfflineOverlay(
+                    onRetryConnection = onRetryConnection,
+                    onExitOffline = onNavigateToConfig
+                )
+            }
 
-        // Connection state overlays
-        if (connectionState !is ControlViewModel.ConnectionState.Offline) {
-            ConnectionStateOverlay(
-                connectionState = connectionState,
-                loadingPercent = uiState.loadingPercent,
-                onRetryConnection = onRetryConnection
-            )
-        }
+            is ControlViewModel.ConnectionState.Connecting -> {
+                if (uiState.loadingPercent in 1..99) {
+                    LoadingOverlay(
+                        message = "Connecting to PLC...",
+                        loadingPercent = uiState.loadingPercent
+                    )
+                }
+            }
 
+            is ControlViewModel.ConnectionState.Failed -> {
+                // Chỉ hiện overlay cho critical errors
+                if (!connectionState.error.contains("Connection lost")) {
+                    ErrorOverlay(
+                        errorMessage = connectionState.error,
+                        onRetryConnection = onRetryConnection
+                    )
+                }
+            }
+            else -> {
+                // No overlay for Connected, Idle states
+            }
+        }
         // Timeout dialog
         if (showTimeoutDialog) {
             TimeoutDialog(
@@ -154,7 +170,6 @@ fun ControlScreen(
                 onRetryConnection = {
                     showTimeoutDialog = false
                     preventAutoDismiss = false
-                    (uiState as? ControlViewModel)?.dismissTimeoutDialog()
                     onRetryConnection()
                 },
                 onNavigateToConfig = {
@@ -165,10 +180,9 @@ fun ControlScreen(
                 onContinueOffline = {
                     showTimeoutDialog = false
                     preventAutoDismiss = false
-                    // Continue in offline mode
                     onContinueOffline()
                 }
             )
         }
-    }
+//    }
 }

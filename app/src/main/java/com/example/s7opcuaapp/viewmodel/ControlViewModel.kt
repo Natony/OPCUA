@@ -379,7 +379,7 @@ class ControlViewModel @Inject constructor(
             stopConnection()
             delay(500)
 
-            // Set offline state with proper UI data
+            // Set offline state
             isOfflineMode = true
             connectionStarted = false
             connectionAttempts = 0
@@ -388,24 +388,28 @@ class ControlViewModel @Inject constructor(
 
             _connectionState.value = ConnectionState.Offline
 
-            // Get last known data or default data
-            val lastData = _uiState.value.plcData
-            val hasData = lastData.bools.any { it } || lastData.ints.any { it != 0 }
-
+            // Ensure we have default data to show
             _uiState.update {
                 it.copy(
-                    loadingPercent = 100, // Set to 100 to show UI
-                    errorMessage = null, // Clear error to show clean UI
-                    lockedButtons = (0..14).toSet() + (203..204).toSet() + setOf(999), // Lock all buttons
+                    loadingPercent = 100, // Important: Set to 100 to show UI
+                    errorMessage = null,
+                    lockedButtons = (0..14).toSet() + (203..204).toSet() + setOf(999),
                     busyButtons = emptySet(),
-                    // Keep last known data if available, otherwise show default
-                    plcData = if (hasData) lastData else PlcData(
+                    plcData = it.plcData.takeIf { data ->
+                        // Keep existing data if any
+                        data.bools.isNotEmpty() || data.ints.isNotEmpty()
+                    } ?: PlcData(
+                        // Otherwise use default data
                         bools = List(15) { false },
                         ints = List(31) { 0 }
                     ),
-                    // Keep other UI states
                     selectedFunction = it.selectedFunction,
-                    intInputs = it.intInputs
+                    intInputs = it.intInputs,
+                    openDialogForIndex = null,
+                    dialogTitle = "",
+                    isWriting = false,
+                    isProcessing = false,
+                    controlsBlockedByAlarm = false
                 )
             }
         }
