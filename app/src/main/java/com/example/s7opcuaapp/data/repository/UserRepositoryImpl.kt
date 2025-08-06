@@ -1,6 +1,5 @@
 package com.example.s7opcuaapp.data.repository
 
-import android.util.Log
 import com.example.s7opcuaapp.data.local.AppDatabase
 import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.*
@@ -14,12 +13,12 @@ import javax.inject.Singleton
 class UserRepositoryImpl @Inject constructor(
     private val database: AppDatabase,
     private val prefsManager: PrefsManager
-) : UserRepository {
+) : BaseRepository(), UserRepository {
 
     private val userDao = database.userDao()
     private val loginHistoryDao = database.loginHistoryDao()
 
-    // In-memory session storage (trong production nên dùng Redis/persistent storage)
+    // In-memory session storage
     private val sessions = mutableMapOf<String, Session>()
 
     override suspend fun createUser(
@@ -27,113 +26,100 @@ class UserRepositoryImpl @Inject constructor(
         password: String,
         role: UserRole,
         createdBy: String
-    ): Result<User> {
-        return try {
-            // Check if username exists
-            if (getUserByUsername(username) != null) {
-                return Result.failure(Exception("Username already exists"))
-            }
+    ): Result<User> = safeExecute("Failed to create user") {
 
-            // Validate password
-            if (!PasswordUtils.isValidPassword(password)) {
-                return Result.failure(Exception("Password does not meet requirements"))
-            }
-
-            val user = User(
-                id = UUID.randomUUID().toString(),
-                username = username,
-                passwordHash = PasswordUtils.hashPassword(password),
-                role = role,
-                isActive = true,
-                createdAt = System.currentTimeMillis(),
-                createdBy = createdBy
-            )
-
-            userDao.insertUser(user)
-            Result.success(user)
-        } catch (e: Exception) {
-            Log.e("UserRepository", "Error creating user", e)
-            Result.failure(e)
+        // Check if username exists
+        getUserByUsername(username)?.let {
+            throw Exception("Username already exists")
         }
+
+        // Validate password
+        if (!PasswordUtils.isValidPassword(password)) {
+            throw Exception("Password does not meet requirements")
+        }
+
+        val user = User(
+            id = UUID.randomUUID().toString(),
+            username = username,
+            passwordHash = PasswordUtils.hashPassword(password),
+            role = role,
+            isActive = true,
+            createdAt = System.currentTimeMillis(),
+            createdBy = createdBy
+        )
+
+        userDao.insertUser(user)
+        logInfo("User created: ${user.username} with role ${user.role}")
+        user
     }
 
-    override suspend fun updateUser(user: User): Result<Unit> {
-        return try {
-            userDao.updateUser(user.copy(modifiedAt = System.currentTimeMillis()))
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    override suspend fun updateUser(user: User): Result<Unit> = safeExecute("Failed to update user") {
+        userDao.updateUser(user.copy(modifiedAt = System.currentTimeMillis()))
+        logDebug("User updated: ${user.username}")
     }
 
-    override suspend fun deleteUser(userId: String): Result<Unit> {
-        return try {
-            val user = userDao.getUserById(userId) ?: return Result.failure(Exception("User not found"))
+    override suspend fun deleteUser(userId: String): Result<Unit> = safeExecute("Failed to delete user") {
+        val user = userDao.getUserById(userId)
+            ?: throw Exception("User not found")
 
-            // Don't delete admin if it's the last one
-            if (user.role == UserRole.ADMIN) {
-                val adminCount = userDao.getActiveUserCountByRole(UserRole.ADMIN)
-                if (adminCount <= 1) {
-                    return Result.failure(Exception("Cannot delete the last admin"))
-                }
+        // Don't delete last admin
+        if (user.role == UserRole.ADMIN) {
+            val adminCount = userDao.getActiveUserCountByRole(UserRole.ADMIN)
+            if (adminCount <= 1) {
+                throw Exception("Cannot delete the last admin")
             }
-
-            userDao.deleteUser(user)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+
+        userDao.deleteUser(user)
+        logInfo("User deleted: ${user.username}")
     }
 
-    override suspend fun activateUser(userId: String, modifiedBy: String): Result<Unit> {
-        return try {
+    override suspend fun activateUser(userId: String, modifiedBy: String): Result<Unit> =
+        safeExecute("Failed to activate user") {
             userDao.updateUserStatus(userId, true, System.currentTimeMillis(), modifiedBy)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+            logDebug("User activated: $userId")
         }
-    }
 
-    override suspend fun deactivateUser(userId: String, modifiedBy: String): Result<Unit> {
-        return try {
+    override suspend fun deactivateUser(userId: String, modifiedBy: String): Result<Unit> =
+        safeExecute("Failed to deactivate user") {
+            val user = userDao.getUserById(userId)
+                ?: throw Exception("User not found")
+
             // Don't deactivate last admin
-            val user = userDao.getUserById(userId) ?: return Result.failure(Exception("User not found"))
             if (user.role == UserRole.ADMIN) {
                 val adminCount = userDao.getActiveUserCountByRole(UserRole.ADMIN)
                 if (adminCount <= 1) {
-                    return Result.failure(Exception("Cannot deactivate the last admin"))
+                    throw Exception("Cannot deactivate the last admin")
                 }
             }
 
             userDao.updateUserStatus(userId, false, System.currentTimeMillis(), modifiedBy)
-            // End all sessions for this user
             sessions.entries.removeIf { it.value.userId == userId }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+            logDebug("User deactivated: ${user.username}")
         }
-    }
 
-    override suspend fun changePassword(userId: String, newPassword: String, modifiedBy: String): Result<Unit> {
-        return try {
-            if (!PasswordUtils.isValidPassword(newPassword)) {
-                return Result.failure(Exception("Password does not meet requirements"))
-            }
+    override suspend fun changePassword(
+        userId: String,
+        newPassword: String,
+        modifiedBy: String
+    ): Result<Unit> = safeExecute("Failed to change password") {
 
-            val user = userDao.getUserById(userId) ?: return Result.failure(Exception("User not found"))
-            val updatedUser = user.copy(
-                passwordHash = PasswordUtils.hashPassword(newPassword),
-                modifiedAt = System.currentTimeMillis(),
-                modifiedBy = modifiedBy
-            )
-            userDao.updateUser(updatedUser)
-
-            // End all sessions for this user
-            sessions.entries.removeIf { it.value.userId == userId }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+        if (!PasswordUtils.isValidPassword(newPassword)) {
+            throw Exception("Password does not meet requirements")
         }
+
+        val user = userDao.getUserById(userId)
+            ?: throw Exception("User not found")
+
+        val updatedUser = user.copy(
+            passwordHash = PasswordUtils.hashPassword(newPassword),
+            modifiedAt = System.currentTimeMillis(),
+            modifiedBy = modifiedBy
+        )
+
+        userDao.updateUser(updatedUser)
+        sessions.entries.removeIf { it.value.userId == userId }
+        logInfo("Password changed for user: ${user.username}")
     }
 
     override fun getAllUsers(): Flow<List<User>> = userDao.getAllUsers()
@@ -146,62 +132,48 @@ class UserRepositoryImpl @Inject constructor(
 
     override fun getUsersByRole(role: UserRole): Flow<List<User>> = userDao.getUsersByRole(role)
 
-    override suspend fun authenticate(username: String, password: String): Result<User> {
-        return try {
+    override suspend fun authenticate(username: String, password: String): Result<User> =
+        safeExecute("Authentication failed") {
             val historyId = UUID.randomUUID().toString()
             val loginTime = System.currentTimeMillis()
 
-            println("🔍 Authenticating user: '$username'") // Thêm quotes để thấy spaces
+            logDebug("Authenticating user: '$username'")
+
             val user = userDao.getUserByUsername(username)
-
-            if (user == null) {
-                println("❌ User not found: '$username'")
-                // KHÔNG insert LoginHistory với userId="unknown" vì sẽ gây foreign key error
-                // Chỉ log và return error
-                return Result.failure(Exception("Invalid credentials"))
-            }
-
-            println("✅ User found: ${user.username}, active: ${user.isActive}")
+                ?: run {
+                    logWarning("User not found: '$username'")
+                    throw Exception("Invalid credentials")
+                }
 
             if (!user.isActive) {
-                println("❌ User is inactive: $username")
+                logWarning("Inactive user attempted login: $username")
                 loginHistoryDao.insertLoginHistory(
                     LoginHistory(
                         id = historyId,
-                        userId = user.id, // Sử dụng user.id thực tế
+                        userId = user.id,
                         username = username,
                         loginTime = loginTime,
                         loginStatus = LoginStatus.FAILED_ACCOUNT_DISABLED
                     )
                 )
-                return Result.failure(Exception("Account is disabled"))
+                throw Exception("Account is disabled")
             }
 
-            // Debug password verification
-            val inputHash = PasswordUtils.hashPassword(password)
-            val storedHash = user.passwordHash
-            println("🔐 Password verification:")
-            println("   Input password: '$password'")
-            println("   Input hash: $inputHash")
-            println("   Stored hash: $storedHash")
-            println("   Match: ${inputHash == storedHash}")
-
             if (!PasswordUtils.verifyPassword(password, user.passwordHash)) {
-                println("❌ Password verification failed for user: $username")
+                logWarning("Invalid password for user: $username")
                 loginHistoryDao.insertLoginHistory(
                     LoginHistory(
                         id = historyId,
-                        userId = user.id, // Sử dụng user.id thực tế
+                        userId = user.id,
                         username = username,
                         loginTime = loginTime,
                         loginStatus = LoginStatus.FAILED_INVALID_CREDENTIALS
                     )
                 )
-                return Result.failure(Exception("Invalid credentials"))
+                throw Exception("Invalid credentials")
             }
 
             // Success
-            println("✅ Authentication successful for user: $username")
             userDao.updateLastLogin(user.id, loginTime)
             loginHistoryDao.insertLoginHistory(
                 LoginHistory(
@@ -214,13 +186,9 @@ class UserRepositoryImpl @Inject constructor(
                 )
             )
 
-            Result.success(user)
-        } catch (e: Exception) {
-            println("💥 Authentication error: ${e.message}")
-            e.printStackTrace()
-            Result.failure(e)
+            logInfo("User authenticated successfully: $username")
+            user
         }
-    }
 
     override suspend fun createSession(user: User, deviceInfo: String?): Session {
         val sessionId = UUID.randomUUID().toString()
@@ -235,6 +203,7 @@ class UserRepositoryImpl @Inject constructor(
             deviceInfo = deviceInfo
         )
         sessions[sessionId] = session
+        logDebug("Session created for user: ${user.username}")
         return session
     }
 
@@ -244,6 +213,7 @@ class UserRepositoryImpl @Inject constructor(
 
         if (now > session.expiryTime) {
             sessions.remove(sessionId)
+            logDebug("Session expired: $sessionId")
             return null
         }
 
@@ -255,6 +225,7 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun endSession(sessionId: String) {
         sessions.remove(sessionId)
+        logDebug("Session ended: $sessionId")
     }
 
     override suspend fun getActiveUserCount(): Int {
