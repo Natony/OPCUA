@@ -42,61 +42,69 @@ internal fun MainControlContent(
             )
         }
 
-        // Main control panels
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(2.dp)
-        ) {
-            // Left Panel
-            LeftControlPanel(
-                isAuto = isAuto,
-                data = uiState.plcData,
-                onToggleBoolean = onToggleBoolean,
-                onOpenDialog = onOpenDialog,
-                onPressButton = onPressButton,
-                onReleaseButton = onReleaseButton,
-                lockedButtons = uiState.lockedButtons,
-                busyButtons = uiState.busyButtons,
-                modifier = Modifier.weight(0.2f)
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Connection lost notification at top
+            if (uiState.errorMessage?.contains("Connection lost", ignoreCase = true) == true ||
+                uiState.errorMessage?.contains("Reconnecting", ignoreCase = true) == true
+            ) {
+                ConnectionLostNotification(onRetryConnection = onRetryConnection)
+            }
 
-            // Center Section
-            CenterSection(
-                uiState = uiState,
-                isAuto = isAuto,
-                onToggleBoolean = onToggleBoolean,
-                onToggleAutoMode = onToggleAutoMode,
-                onFunctionSelect = onFunctionSelect,
-                onTextChange = onTextChange,
-                onSendAll = onSendAll,
-                modifier = Modifier.weight(0.6f)
-            )
+            // Main control panels
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(2.dp)
+            ) {
+                // Left Panel
+                LeftControlPanel(
+                    isAuto = isAuto,
+                    data = uiState.plcData,
+                    onToggleBoolean = onToggleBoolean,
+                    onOpenDialog = onOpenDialog,
+                    onPressButton = onPressButton,
+                    onReleaseButton = onReleaseButton,
+                    lockedButtons = uiState.lockedButtons,
+                    busyButtons = uiState.busyButtons,
+                    modifier = Modifier.weight(0.2f)
+                )
 
-            // Right Panel
-            RightControlPanel(
-                isAuto = isAuto,
-                data = uiState.plcData,
-                onToggleBoolean = onToggleBoolean,
-                onOpenDialog = onOpenDialog,
-                onPressButton = onPressButton,
-                onReleaseButton = onReleaseButton,
-                lockedButtons = uiState.lockedButtons,
-                busyButtons = uiState.busyButtons,
-                modifier = Modifier.weight(0.2f)
-            )
+                // Center Section
+                CenterSection(
+                    uiState = uiState,
+                    isAuto = isAuto,
+                    onToggleBoolean = onToggleBoolean,
+                    onToggleAutoMode = onToggleAutoMode,
+                    onFunctionSelect = onFunctionSelect,
+                    onTextChange = onTextChange,
+                    onSendAll = onSendAll,
+                    modifier = Modifier.weight(0.6f)
+                )
+
+                // Right Panel
+                RightControlPanel(
+                    isAuto = isAuto,
+                    data = uiState.plcData,
+                    onToggleBoolean = onToggleBoolean,
+                    onOpenDialog = onOpenDialog,
+                    onPressButton = onPressButton,
+                    onReleaseButton = onReleaseButton,
+                    lockedButtons = uiState.lockedButtons,
+                    busyButtons = uiState.busyButtons,
+                    modifier = Modifier.weight(0.2f)
+                )
+            }
         }
-
         // Connection lost notification
         if (uiState.errorMessage?.contains("Connection lost") == true) {
             ConnectionLostNotification(onRetryConnection = onRetryConnection)
         }
 
         // Performance overlay in debug
-        val isInPreview = LocalInspectionMode.current
-        if (BuildConfig.DEBUG && !isInPreview) {
-            PerformanceOverlay(modifier = Modifier.padding(16.dp))
-        }
+//        val isInPreview = LocalInspectionMode.current
+//        if (BuildConfig.DEBUG && !isInPreview) {
+//            PerformanceOverlay(modifier = Modifier.padding(16.dp))
+//        }
     }
 }
 

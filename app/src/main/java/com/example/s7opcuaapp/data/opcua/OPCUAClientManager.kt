@@ -53,10 +53,10 @@ object OPCUAClientManager {
     private val monitorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Timeout constants
-    private const val DISCOVERY_TIMEOUT = 5000L
-    private const val CONNECTION_TIMEOUT = 10000L
-    private const val OPERATION_TIMEOUT = 5000L
-    private const val DATA_TIMEOUT = 10000L // 10s without data = connection lost
+    private const val DISCOVERY_TIMEOUT = 10000L  // Increased from 5000
+    private const val CONNECTION_TIMEOUT = 20000L // Increased from 10000
+    private const val OPERATION_TIMEOUT = 10000L  // Increased from 5000
+    private const val DATA_TIMEOUT = 15000L       // Increased from 10000
 
     private var sessionListener: SessionActivityListener? = null
     private var subscriptionListener: SubscriptionListener? = null
@@ -67,7 +67,7 @@ object OPCUAClientManager {
     // Fast detection flag
     @Volatile
     private var lastSessionActiveTime = 0L
-    private val SESSION_TIMEOUT = 3000L // 3 seconds
+    private const val SESSION_TIMEOUT = 10000L
 
 
     fun setConnectionCallbacks(
@@ -103,27 +103,39 @@ object OPCUAClientManager {
 
     suspend fun checkConnectionHealth(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // First check basic conditions
-            if (client == null || isConnectionLost.get()) {
+            val cli = client
+            if (cli == null || isConnectionLost.get()) {
                 return@withContext false
             }
 
-            // Check session active time
+            // More lenient time check
             val timeSinceActive = System.currentTimeMillis() - lastSessionActiveTime
-            if (lastSessionActiveTime > 0 && timeSinceActive > SESSION_TIMEOUT) {
-                Log.w("OPCUAClient", "Session timeout in quick check: ${timeSinceActive}ms")
+
+            // Only flag as unhealthy if really long time
+            if (lastSessionActiveTime > 0 && timeSinceActive > SESSION_TIMEOUT * 2) {
+                Log.w("OPCUAClient", "Session timeout: ${timeSinceActive}ms > ${SESSION_TIMEOUT * 2}ms")
                 return@withContext false
             }
 
             // If recently active, assume healthy
-            if (timeSinceActive < 1000) {
+            if (timeSinceActive < SESSION_TIMEOUT / 2) {
                 return@withContext true
             }
 
-            // Otherwise do actual health check
-            performHealthCheck()
+            // Otherwise do actual health check with longer timeout
+            withTimeoutOrNull(3000L) { // Increased from 1500ms
+                val future = cli.readValue(
+                    0.0,
+                    TimestampsToReturn.Neither,
+                    Identifiers.Server_ServerStatus_State
+                )
+                future.get(3000, TimeUnit.MILLISECONDS)
+                lastSessionActiveTime = System.currentTimeMillis()
+                true
+            } ?: false
+
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "Quick health check failed", e)
+            Log.e("OPCUAClient", "Health check failed", e)
             false
         }
     }
@@ -198,43 +210,53 @@ object OPCUAClientManager {
         connectionMonitorJob?.cancel()
         connectionMonitorJob = monitorScope.launch {
             while (isActive) {
-                delay(2000) // Check every 2 seconds for faster detection
+                delay(5000) // Check every 5 seconds instead of 2
 
                 try {
-                    // Multi-level health check
                     val now = System.currentTimeMillis()
 
-                    // 1. Check session active time
-                    if (lastSessionActiveTime > 0 && (now - lastSessionActiveTime) > SESSION_TIMEOUT) {
-                        Log.w("OPCUAClient", "⚠️ Session timeout detected")
-                        handleConnectionLost("Session inactive for ${SESSION_TIMEOUT}ms")
-                        break
-                    }
+                    // Only check if we think we're connected
+                    if (client != null && !isConnectionLost.get()) {
+                        // More lenient session check
+                        if (lastSessionActiveTime > 0) {
+                            val timeSinceActive = now - lastSessionActiveTime
 
-                    // 2. Check data flow
-                    val hasRecentData = lastDataReceived.values.any {
-                        (now - it) < DATA_TIMEOUT
-                    }
+                            // Only worry if really long time without activity
+                            if (timeSinceActive > SESSION_TIMEOUT * 2) {
+                                Log.w("OPCUAClient", "⚠️ No session activity for ${timeSinceActive}ms")
 
-                    // 3. If no recent data and we have subscriptions, check connection
-                    if (!hasRecentData && lastDataReceived.isNotEmpty()) {
-                        Log.w("OPCUAClient", "⚠️ No data received for ${DATA_TIMEOUT}ms")
+                                // Try health check before declaring lost
+                                val isHealthy = performHealthCheck()
+                                if (!isHealthy) {
+                                    handleConnectionLost("No activity and health check failed")
+                                    break
+                                }
+                            }
+                        }
 
-                        // Try active health check
-                        val isHealthy = performHealthCheck()
-                        if (!isHealthy) {
-                            handleConnectionLost("Health check failed")
-                            break
+                        // Check data flow with more lenient timeout
+                        val hasRecentData = lastDataReceived.values.any {
+                            (now - it) < DATA_TIMEOUT * 2  // More lenient
+                        }
+
+                        // Only check if we expect data
+                        if (!hasRecentData && lastDataReceived.isNotEmpty()) {
+                            Log.w("OPCUAClient", "⚠️ No data for long time")
+
+                            // Try health check
+                            val isHealthy = performHealthCheck()
+                            if (!isHealthy) {
+                                handleConnectionLost("No data and health check failed")
+                                break
+                            }
                         }
                     }
-
                 } catch (e: Exception) {
-                    Log.e("OPCUAClient", "Error in connection monitor", e)
+                    Log.e("OPCUAClient", "Monitor error", e)
                 }
             }
         }
     }
-
 
     /**
      * Perform health check by reading server state

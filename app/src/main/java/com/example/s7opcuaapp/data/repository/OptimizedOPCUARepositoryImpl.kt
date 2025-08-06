@@ -327,37 +327,55 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         loadingTracker.setError()
     }
 
+    private fun getNodeIndex(nodeId: String): Int {
+        return try {
+            val nodeIndex = nodeId.substringAfter("i=").toInt()
+            when {
+                nodeIndex in 3..17 -> nodeIndex - 3   // Bool indices 0-14
+                nodeIndex in 18..45 -> nodeIndex - 18  // Int indices 0-27
+                else -> -1
+            }
+        } catch (e: Exception) {
+            Log.w("OPCUARepo", "Failed to parse node index from $nodeId", e)
+            -1
+        }
+    }
 
     /**
      * Subscribe with grouped sampling intervals
      */
     private suspend fun subscribeWithGroups() {
         var totalSubscriptions = 0
+        val totalNodes = boolNodeIds.size + intNodeIds.size
 
         subscriptionGroups.forEach { (groupName, group) ->
             Log.d("OPCUARepo", "📊 Subscribing $groupName group (${group.nodeIds.size} nodes, ${group.samplingInterval}ms)")
 
-            group.nodeIds.forEach { nodeId ->
+            for (nodeId in group.nodeIds) {
                 try {
-                    // Calculate index based on nodeId
-                    val nodeIndex = nodeId.substringAfter("i=").toInt()
-                    val index = when {
-                        nodeIndex in 3..17 -> nodeIndex - 3  // Bool indices 0-14
-                        nodeIndex in 18..45 -> nodeIndex - 18 // Int indices 0-27
-                        else -> -1
+                    val index = getNodeIndex(nodeId)
+                    if (index < 0) {
+                        Log.w("OPCUARepo", "Invalid node index for $nodeId")
+                        continue
                     }
 
-                    if (index >= 0) {
-                        OPCUAClientManager.createSubscription(
-                            nodeIdString = nodeId,
-                            samplingInterval = UInteger.valueOf(group.samplingInterval)
-                        ) { dataValue ->
-                            handleDataUpdate(nodeId, index, dataValue)
-                        }
-
-                        totalSubscriptions++
-                        loadingTracker.markLoaded(nodeId)
+                    OPCUAClientManager.createSubscription(
+                        nodeIdString = nodeId,
+                        samplingInterval = UInteger.valueOf(group.samplingInterval)
+                    ) { dataValue ->
+                        handleDataUpdate(nodeId, index, dataValue)
                     }
+
+                    totalSubscriptions++
+                    loadingTracker.markLoaded(nodeId)
+
+                    // Calculate and log progress
+                    val percent = (totalSubscriptions * 100) / totalNodes
+                    Log.v("OPCUARepo", "Subscription progress: $percent% ($totalSubscriptions/$totalNodes)")
+
+                    // Small delay to prevent overwhelming
+                    delay(20) // Reduced from 50ms for faster loading
+
                 } catch (e: Exception) {
                     Log.e("OPCUARepo", "Failed to subscribe $nodeId", e)
                 }
@@ -372,6 +390,11 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
      * Handle data updates through buffer
      */
     private fun handleDataUpdate(nodeId: String, index: Int, dataValue: DataValue) {
+        if (index < 0) {
+            Log.w("OPCUARepo", "Invalid index for node $nodeId")
+            return
+        }
+
         try {
             // Log update frequency for debugging
             updateCounter++
@@ -383,7 +406,8 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                 lastUpdateLogTime = now
             }
 
-            val nodeIndex = nodeId.substringAfter("i=").toInt()
+            val nodeIndex = nodeId.substringAfter("i=").toIntOrNull() ?: return
+
             when {
                 nodeIndex in 3..17 -> {
                     val value = dataValue.value.value as? Boolean ?: false
@@ -396,16 +420,23 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                         is Long -> raw.toInt()
                         is Short -> raw.toInt()
                         is UInteger -> raw.toInt()
-                        else -> 0
+                        else -> {
+                            Log.w("OPCUARepo", "Unknown data type for $nodeId: ${raw?.javaClass}")
+                            0
+                        }
                     }
                     dataBuffer.updateInt(index, value)
+                }
+                else -> {
+                    Log.w("OPCUARepo", "Unexpected node index: $nodeIndex for $nodeId")
                 }
             }
         } catch (e: Exception) {
             Log.w("OPCUARepo", "Error handling update for $nodeId", e)
         }
     }
-    /**
+
+/**
      * Write boolean with performance tracking
      */
     override suspend fun writeBoolean(index: Int, value: Boolean) = withContext(Dispatchers.IO) {

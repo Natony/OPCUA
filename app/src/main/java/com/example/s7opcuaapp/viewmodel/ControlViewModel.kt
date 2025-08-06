@@ -103,7 +103,7 @@ class ControlViewModel @Inject constructor(
         const val BOOL_OFFSET = 0
         const val INT_OFFSET = 200
         const val MIN_BUTTON_ACTION_INTERVAL = 100L // Minimum 100ms between actions
-        const val CONNECTION_TIMEOUT_MS = 15000L
+        const val CONNECTION_TIMEOUT_MS = 30000L
     }
 
     init {
@@ -177,29 +177,26 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch {
             connectionMutex.withLock {
                 if (connectionStarted && _connectionState.value is ConnectionState.Connected) {
-                    Log.d("ControlVM", "⚠️ Already connected")
+                    Log.d("ControlVM", "Already connected")
                     return@withLock
                 }
 
-                // Reset offline mode khi start connection
                 isOfflineMode = false
                 connectionAttempts++
 
-                Log.d("ControlVM", "🚀 Starting connection attempt $connectionAttempts/$maxRetryAttempts")
+                Log.d("ControlVM", "Starting connection attempt $connectionAttempts/$maxRetryAttempts")
 
                 try {
                     val currentDevice = prefsManager.getCurrentDevice()
                     if (currentDevice == null) {
-                        Log.e("ControlVM", "No device configured")
                         _connectionState.value = ConnectionState.MaxRetriesExceeded("No device configured")
                         return@withLock
                     }
 
-                    // Set connecting state với attempt number
                     connectionStarted = true
                     _connectionState.value = ConnectionState.Connecting(connectionAttempts)
 
-                    // Reset UI state
+                    // Clear error state
                     _uiState.update {
                         it.copy(
                             loadingPercent = 0,
@@ -207,42 +204,41 @@ class ControlViewModel @Inject constructor(
                         )
                     }
 
-                    // Start timeout timer
-                    connectionTimeoutManager.startTimeout(viewModelScope) {
-                        handleConnectionTimeout()
-                    }
-
-                    // Update device and start
+                    // Update device
                     repoImpl.updateDevice(currentDevice)
-                    repoImpl.start()
 
-                    // Wait for loading to complete or timeout
-                    val loadingJob = viewModelScope.launch {
-                        repoImpl.observeLoadingPercent()
-                            .timeout(CONNECTION_TIMEOUT_MS.milliseconds)
-                            .collect { percent ->
-                                Log.d("ControlVM", "Loading: $percent%")
-                                _uiState.update { it.copy(loadingPercent = percent) }
+                    // Start connection with longer timeout
+                    withTimeout(CONNECTION_TIMEOUT_MS) {
+                        repoImpl.start()
 
-                                when {
-                                    percent == 100 -> {
-                                        // Success!
-                                        connectionTimeoutManager.cancelTimeout()
-                                        connectionAttempts = 0 // Reset on success
-                                        _connectionState.value = ConnectionState.Connected
-                                        lastSuccessfulPing = System.currentTimeMillis()
-                                        startConnectionMonitoring()
-                                        startOptimizedDataObservation()
-                                    }
-                                    percent == -1 -> {
-                                        // Error from repository
-                                    }
-                                }
+                        // Wait for connection to establish
+                        var connected = false
+                        var attempts = 0
+                        while (!connected && attempts < 30) { // 30 seconds max
+                            delay(1000)
+                            attempts++
+
+                            val percent = _uiState.value.loadingPercent
+                            Log.d("ControlVM", "Waiting for connection... $percent% (attempt $attempts)")
+
+                            if (percent == 100) {
+                                connected = true
+                                connectionAttempts = 0
+                                _connectionState.value = ConnectionState.Connected
+                                lastSuccessfulPing = System.currentTimeMillis()
+                                startConnectionMonitoring()
+                                startOptimizedDataObservation()
+                            } else if (percent == -1) {
+                                throw Exception("Connection error from repository")
                             }
+                        }
+
+                        if (!connected) {
+                            throw Exception("Connection timeout - loading incomplete")
+                        }
                     }
 
                 } catch (e: Exception) {
-                    connectionTimeoutManager.cancelTimeout()
                     handleConnectionError(e)
                 }
             }
@@ -254,21 +250,32 @@ class ControlViewModel @Inject constructor(
         connectionStarted = false
 
         viewModelScope.launch {
+            // DON'T show duplicate dialogs
             if (connectionAttempts < maxRetryAttempts) {
-                // Still have retries left
                 _connectionState.value = ConnectionState.Failed(
                     error.message ?: "Connection failed",
                     connectionAttempts
                 )
 
-                // Auto retry after delay
-                delay(2000)
-                startConnection()
+                // Show error in UI but don't show dialog
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "Connection failed (attempt $connectionAttempts/$maxRetryAttempts)",
+                        loadingPercent = -1
+                    )
+                }
+
+                // Auto retry
+                delay(3000)
+                if (!isOfflineMode && !isShowingTimeoutDialog) {
+                    startConnection()
+                }
             } else {
-                // Max retries exceeded
+                // Max retries - show timeout dialog
                 _connectionState.value = ConnectionState.MaxRetriesExceeded(
-                    "Failed to connect after $maxRetryAttempts attempts: ${error.message}"
+                    "Failed after $maxRetryAttempts attempts"
                 )
+                isShowingTimeoutDialog = true
             }
         }
     }
@@ -301,36 +308,31 @@ class ControlViewModel @Inject constructor(
         connectionMonitorJob?.cancel()
         connectionMonitorJob = viewModelScope.launch {
             var consecutiveFailures = 0
-            val maxConsecutiveFailures = 2 // Fail after 2 consecutive failures
-            val checkInterval = 1500L
+            val maxFailures = 3 // Increased from 2
 
             while (connectionStarted && _connectionState.value is ConnectionState.Connected) {
-                delay(3000L) // Check every 3 seconds instead of 5
+                delay(5000) // Check every 5 seconds
 
                 try {
-                    // More aggressive connection check
-                    val isConnected = withTimeoutOrNull(1000L) {
+                    val isConnected = withTimeoutOrNull(2000L) {
                         repoImpl.isConnected()
                     } ?: false
 
                     if (!isConnected) {
                         consecutiveFailures++
-                        Log.w("ControlVM", "Connection check failed ($consecutiveFailures/$maxConsecutiveFailures)")
+                        Log.w("ControlVM", "Connection check failed ($consecutiveFailures/$maxFailures)")
 
-                        if (consecutiveFailures >= maxConsecutiveFailures) {
-                            Log.w("ControlVM", "Connection lost detected after $consecutiveFailures failures")
+                        if (consecutiveFailures >= maxFailures) {
                             handleConnectionLost()
                             break
                         }
                     } else {
-                        consecutiveFailures = 0 // Reset on success
+                        consecutiveFailures = 0
                         lastSuccessfulPing = System.currentTimeMillis()
                     }
                 } catch (e: Exception) {
                     consecutiveFailures++
-                    Log.e("ControlVM", "Error checking connection ($consecutiveFailures/$maxConsecutiveFailures)", e)
-
-                    if (consecutiveFailures >= maxConsecutiveFailures) {
+                    if (consecutiveFailures >= maxFailures) {
                         handleConnectionLost()
                         break
                     }
@@ -339,33 +341,27 @@ class ControlViewModel @Inject constructor(
         }
     }
 
-    fun continueOfflineFromDialog() {
-        Log.d("ControlVM", "🔌 User chose to continue in offline mode")
-        continueOffline()
-    }
-
     private fun handleConnectionLost() {
-        Log.w("ControlVM", "🔌 Connection lost!")
+        Log.w("ControlVM", "Connection lost!")
         connectionStarted = false
         connectionMonitorJob?.cancel()
 
         _uiState.update {
             it.copy(
-                errorMessage = "Connection to PLC lost",
+                errorMessage = "Connection to PLC lost - Retrying...",
                 loadingPercent = -1
             )
         }
 
+        // Show as notification, not dialog
         _connectionState.value = ConnectionState.Failed("Connection lost", 0)
 
-        // Chỉ auto retry nếu được phép và không đang show timeout dialog
-        if (autoRetryEnabled && !isShowingTimeoutDialog && !isOfflineMode) {
+        // Auto retry
+        if (!isOfflineMode && !isShowingTimeoutDialog) {
             viewModelScope.launch {
                 delay(3000)
-                if (autoRetryEnabled && !isShowingTimeoutDialog && !isOfflineMode) {
-                    connectionAttempts = 0
-                    startConnection()
-                }
+                connectionAttempts = 0 // Reset attempts for reconnection
+                startConnection()
             }
         }
     }
