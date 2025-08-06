@@ -52,6 +52,7 @@ fun MainNavGraph(rootNavController: NavHostController) {
     val coroutineScope = rememberCoroutineScope()
 
     var shouldReconnect by remember { mutableStateOf(false) }
+    var lastRoute by remember { mutableStateOf<String?>(null) }
 
     // Monitor navigation and connection state
     LaunchedEffect(currentRoute) {
@@ -62,19 +63,41 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 // Update current device
                 currentDevice.value = prefsManager.getCurrentDevice()
 
+                // Always refresh connection state when returning to control
+                controlViewModel.refreshConnectionState()
+
                 // Start connection if needed
-                if (shouldReconnect || connectionState == ControlViewModel.ConnectionState.Idle) {
-                    Log.d("MainNavGraph", "Starting connection on control screen")
-                    shouldReconnect = false
-                    controlViewModel.startConnection()
+                when (connectionState) {
+                    is ControlViewModel.ConnectionState.Idle -> {
+                        Log.d("MainNavGraph", "Control screen - Idle state, starting connection")
+                        controlViewModel.startConnection()
+                    }
+                    is ControlViewModel.ConnectionState.Failed -> {
+                        // Only auto-reconnect if we just navigated back
+                        if (lastRoute == "config_btm" && shouldReconnect) {
+                            Log.d("MainNavGraph", "Returning from config with reconnect flag")
+                            shouldReconnect = false
+                            controlViewModel.resetConnection()
+                        }
+                    }
+                    is ControlViewModel.ConnectionState.Connected -> {
+                        Log.d("MainNavGraph", "Already connected, refreshing state")
+                        // Just refresh to ensure UI is in sync
+                        controlViewModel.refreshConnectionState()
+                    }
+                    else -> {
+                        Log.d("MainNavGraph", "Control screen - State: $connectionState")
+                    }
                 }
             }
+
             "config_btm" -> {
                 // Don't stop connection when going to config
-                // Just update UI to show current connection state
-                Log.d("MainNavGraph", "Entered config, connection state: $connectionState")
+                Log.d("MainNavGraph", "Entered config, maintaining connection state")
             }
         }
+
+        lastRoute = currentRoute
     }
 
     // Handle connection state changes globally
@@ -134,8 +157,8 @@ fun MainNavGraph(rootNavController: NavHostController) {
                         topNavController.navigate("config_btm")
                     },
                     onRetryConnection = {
-                        // Reset connection attempts and retry
-                        controlViewModel.resetConnectionAttempts()
+                        Log.d("MainNavGraph", "User requested retry connection")
+                        // Full reset and retry
                         controlViewModel.resetConnection()
                     },
                     onToggleBoolean = { idx, newVal ->
@@ -170,7 +193,9 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onDismissTimeoutDialog = {
                         controlViewModel.dismissTimeoutDialog()
                     },
-                    onContinueOffline = { controlViewModel.continueOffline() }
+                    onContinueOffline = {
+                        controlViewModel.continueOffline()
+                    }
                 )
             }
 
@@ -224,29 +249,30 @@ fun MainNavGraph(rootNavController: NavHostController) {
                     onSelectDevice = { device ->
                         configViewModel.onSelectDevice(device) {
                             coroutineScope.launch {
-                                Log.d("MainNavGraph", "Device selected: ${device.name}")
+                                Log.d("MainNavGraph", "📱 Device selected: ${device.name}")
 
                                 // Update current device
                                 currentDevice.value = device
 
-                                // Stop current connection completely
-                                Log.d("MainNavGraph", "Stopping current connection...")
+                                // Complete reset when changing device
+                                Log.d("MainNavGraph", "🛑 Stopping current connection...")
                                 controlViewModel.stopConnection()
 
-                                // Wait longer for complete cleanup
+                                // Wait for full cleanup
                                 delay(2000)
 
-                                // Reset connection state and attempts
-                                Log.d("MainNavGraph", "Resetting states...")
+                                // Reset all states
+                                Log.d("MainNavGraph", "♻️ Resetting connection states...")
                                 controlViewModel.resetConnectionAttempts()
 
                                 // Set flag to reconnect
                                 shouldReconnect = true
 
-                                // Navigate to control
-                                Log.d("MainNavGraph", "Navigating to control screen...")
+                                // Navigate back to control
+                                Log.d("MainNavGraph", "📍 Navigating to control screen...")
                                 topNavController.navigate("control") {
                                     popUpTo("control") { inclusive = true }
+                                    launchSingleTop = true
                                 }
                             }
                         }
