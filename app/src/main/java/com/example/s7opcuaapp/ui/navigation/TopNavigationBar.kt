@@ -18,10 +18,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.BatteryStatusItem
 import com.example.s7opcuaapp.util.StatusLockConfig
@@ -91,7 +93,6 @@ fun TopNavigationBar(
         shadowElevation = 4.dp
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Remove first row, merge into second
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -111,7 +112,8 @@ fun TopNavigationBar(
                         imageVector = connectionIcon,
                         contentDescription = "Connection",
                         modifier = Modifier.size(20.dp),
-                        tint = if (connectionState is ControlViewModel.ConnectionState.Connecting) connectionColor.copy(alpha = alpha) else connectionColor
+                        tint = if (connectionState is ControlViewModel.ConnectionState.Connecting)
+                            connectionColor.copy(alpha = alpha) else connectionColor
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
@@ -153,7 +155,8 @@ fun TopNavigationBar(
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
-                            color = if (statusValue == 11) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (statusValue == 11) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
                             maxLines = 1
                         )
@@ -174,7 +177,8 @@ fun TopNavigationBar(
                             Icon(
                                 painter = painterResource(id = item.iconRes),
                                 contentDescription = item.title,
-                                tint = if (currentRoute == item.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (currentRoute == item.route) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -186,7 +190,11 @@ fun TopNavigationBar(
                     BatteryStatusItem(
                         level = batteryLevel,
                         thresholds = listOf(20, 80),
-                        icons = listOf(R.drawable.ic_battery_low, R.drawable.ic_battery_medium, R.drawable.ic_battery_full),
+                        icons = listOf(
+                            R.drawable.ic_battery_low,
+                            R.drawable.ic_battery_medium,
+                            R.drawable.ic_battery_full
+                        ),
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -194,10 +202,71 @@ fun TopNavigationBar(
                 // Logout (10)
                 Box(modifier = Modifier.weight(0.03f), contentAlignment = Alignment.CenterEnd) {
                     IconButton(onClick = onLogout, modifier = Modifier.size(36.dp)) {
-                        Icon(imageVector = Icons.Default.ExitToApp, contentDescription = "Logout", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Logout",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
         }
     }
+}
+
+// ========== PREVIEW SECTION ==========
+@Preview(showBackground = true, widthDp = 1080, heightDp = 100)
+@Composable
+fun TopNavigationBarConnectedPreview() {
+    TopNavigationBar(
+        navController = rememberNavController(),
+        statusValue = 1,
+        batteryLevel = 75,
+        deviceName = "PLC-01",
+        connectionState = ControlViewModel.ConnectionState.Connected,
+        onLogout = {}
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 100)
+@Composable
+fun TopNavigationBarConnectingPreview() {
+    TopNavigationBar(
+        navController = rememberNavController(),
+        statusValue = 2,
+        batteryLevel = 50,
+        deviceName = "PLC-02",
+        connectionState = ControlViewModel.ConnectionState.Connecting(attempt = 2),
+        onLogout = {}
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 100)
+@Composable
+fun TopNavigationBarFailedPreview() {
+    TopNavigationBar(
+        navController = rememberNavController(),
+        statusValue = 11,
+        batteryLevel = 10,
+        deviceName = "PLC-Error",
+        connectionState = ControlViewModel.ConnectionState.Failed(
+            error = "Timeout",
+            attempt = 3
+        ),
+        onLogout = {}
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 100)
+@Composable
+fun TopNavigationBarOfflinePreview() {
+    TopNavigationBar(
+        navController = rememberNavController(),
+        statusValue = 0,
+        batteryLevel = 100,
+        deviceName = "PLC-Offline",
+        connectionState = ControlViewModel.ConnectionState.Offline,
+        onLogout = {}
+    )
 }

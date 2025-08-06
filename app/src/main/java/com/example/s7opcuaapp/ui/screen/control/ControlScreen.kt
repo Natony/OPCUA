@@ -2,30 +2,22 @@ package com.example.s7opcuaapp.ui.screen.control
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import com.example.s7opcuaapp.viewmodel.ControlViewModel
-import kotlinx.coroutines.delay
-import android.util.Log
 import androidx.compose.material.icons.*
 import androidx.compose.material.icons.filled.*
-import com.example.s7opcuaapp.ui.components.ConnectionLostNotification
-import com.example.s7opcuaapp.ui.components.MainControlContent
-import com.example.s7opcuaapp.ui.components.LoadingOverlay
-import com.example.s7opcuaapp.ui.components.OfflineOverlay
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Job
+import android.util.Log
+import com.example.s7opcuaapp.data.model.PlcData
+import com.example.s7opcuaapp.ui.components.*
+import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.layout.*
 
 @Composable
 fun ControlScreen(
@@ -53,33 +45,24 @@ fun ControlScreen(
     var timeoutCountdown by remember { mutableStateOf(30) }
     var countdownJob by remember { mutableStateOf<Job?>(null) }
 
-    // Monitor connection state for timeout handling - SIMPLIFIED
+    // Monitor connection state for timeout handling
     LaunchedEffect(connectionState) {
         when (connectionState) {
             is ControlViewModel.ConnectionState.MaxRetriesExceeded -> {
                 Log.d("ControlScreen", "Max retries exceeded - showing timeout dialog")
-
-                // Cancel any existing countdown
                 countdownJob?.cancel()
-
-                // Show dialog with fresh countdown
                 showTimeoutDialog = true
-                timeoutCountdown = 30 // 30 seconds instead of 10
+                timeoutCountdown = 30
 
-                // Start countdown in separate job
                 countdownJob = launch {
                     try {
                         while (timeoutCountdown > 0 && showTimeoutDialog) {
                             delay(1000)
                             timeoutCountdown--
-
-                            // Log countdown progress
                             if (timeoutCountdown % 5 == 0) {
                                 Log.d("ControlScreen", "Timeout countdown: ${timeoutCountdown}s")
                             }
                         }
-
-                        // Only navigate if dialog is still showing and countdown reached 0
                         if (showTimeoutDialog && timeoutCountdown == 0) {
                             Log.d("ControlScreen", "Timeout expired, navigating to config")
                             showTimeoutDialog = false
@@ -92,7 +75,6 @@ fun ControlScreen(
             }
 
             is ControlViewModel.ConnectionState.Connected -> {
-                // Clear timeout dialog if connection succeeds
                 if (showTimeoutDialog) {
                     Log.d("ControlScreen", "Connection restored, dismissing timeout dialog")
                     showTimeoutDialog = false
@@ -100,10 +82,7 @@ fun ControlScreen(
                     countdownJob = null
                 }
             }
-
-            else -> {
-                // Don't auto-dismiss for other states
-            }
+            else -> { /* Don't auto-dismiss for other states */ }
         }
     }
 
@@ -141,7 +120,6 @@ fun ControlScreen(
             }
 
             is ControlViewModel.ConnectionState.Connecting -> {
-                // Show loading overlay during connection
                 if (uiState.loadingPercent in 1..99) {
                     LoadingOverlay(
                         message = "Connecting to PLC... (Attempt ${connectionState.attempt}/3)",
@@ -152,21 +130,16 @@ fun ControlScreen(
             }
 
             is ControlViewModel.ConnectionState.Failed -> {
-                // Show connection lost notification instead of full overlay
                 if (connectionState.error.contains("Connection lost", ignoreCase = true)) {
-                    ConnectionLostNotification(
-                        onRetryConnection = onRetryConnection
-                    )
+                    ConnectionLostNotification(onRetryConnection = onRetryConnection)
                 }
             }
 
-            else -> { /* No overlay */
-            }
+            else -> { /* No overlay */ }
         }
 
         // Timeout dialog with improved UX
         if (showTimeoutDialog) {
-            // Custom dialog with better visibility
             AlertDialog(
                 onDismissRequest = { /* Can't dismiss by tapping outside */ },
                 icon = {
@@ -192,7 +165,6 @@ fun ControlScreen(
                             style = MaterialTheme.typography.bodyLarge
                         )
 
-                        // Countdown with progress indicator
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -221,22 +193,12 @@ fun ControlScreen(
                             fontWeight = FontWeight.SemiBold
                         )
 
-                        // Options with descriptions
                         Column(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                "• Retry: Try connecting again",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "• Config: Change connection settings",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "• Offline: View interface without PLC",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Text("• Retry: Try connecting again", style = MaterialTheme.typography.bodySmall)
+                            Text("• Config: Change connection settings", style = MaterialTheme.typography.bodySmall)
+                            Text("• Offline: View interface without PLC", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 },
@@ -244,7 +206,6 @@ fun ControlScreen(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Retry button (primary action)
                         Button(
                             onClick = {
                                 Log.d("ControlScreen", "User chose to retry connection")
@@ -267,7 +228,6 @@ fun ControlScreen(
                             Text("Retry")
                         }
 
-                        // Config button
                         OutlinedButton(
                             onClick = {
                                 Log.d("ControlScreen", "User chose to go to config")
@@ -288,7 +248,6 @@ fun ControlScreen(
                     }
                 },
                 dismissButton = {
-                    // Offline button (text button style)
                     TextButton(
                         onClick = {
                             Log.d("ControlScreen", "User chose offline mode")
@@ -305,4 +264,80 @@ fun ControlScreen(
             )
         }
     }
+}
+
+// ========== PREVIEW SECTION ==========
+@Preview(showBackground = true, widthDp = 1080, heightDp = 720)
+@Composable
+fun ControlScreenPreview() {
+    val samplePlcData = PlcData(
+        bools = List(15) { it % 2 == 0 },
+        ints = List(31) { it }
+    )
+
+    val sampleState = ControlUiState(
+        plcData = samplePlcData,
+        isWriting = false,
+        openDialogForIndex = null,
+        selectedFunction = 1,
+        intInputs = mapOf(
+            2 to "10", 3 to "20", 4 to "30",
+            5 to "40", 6 to "50", 7 to "60"
+        ),
+        loadingPercent = 100,
+        lockedButtons = emptySet(),
+        busyButtons = emptySet(),
+        isProcessing = false,
+        errorMessage = null
+    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Connected,
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1080, heightDp = 720)
+@Composable
+fun ControlScreenOfflinePreview() {
+    val sampleState = ControlUiState(
+        plcData = PlcData(
+            bools = List(15) { false },
+            ints = List(31) { 0 }
+        ),
+        errorMessage = "Working offline",
+        lockedButtons = (0..14).toSet(),
+        loadingPercent = 100
+    )
+
+    ControlScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Offline,
+        onNavigateToConfig = {},
+        onRetryConnection = {},
+        onToggleBoolean = { _, _ -> },
+        onOpenDialog = { _, _ -> },
+        onConfirmNumber = { _, _ -> },
+        onDismissDialog = {},
+        onFunctionSelect = {},
+        onTextChange = { _, _ -> },
+        onSendAll = {},
+        onPressButton = { _ -> false },
+        onReleaseButton = { _ -> false },
+        onDismissTimeoutDialog = {},
+        onContinueOffline = {}
+    )
 }
