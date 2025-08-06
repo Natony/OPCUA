@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.data.model.DeviceEntity
@@ -275,4 +276,55 @@ fun ConfigScreen(
             }
         }
     }
+}
+
+// ========== PREVIEW SECTION ==========
+
+@Preview(showBackground = true, widthDp = 1920, heightDp = 1200)
+@Composable
+fun ConfigScreenWithDevicesPreview() {
+    val sampleDevices = listOf(
+        DeviceEntity(
+            id = "1",
+            name = "PLC-01",
+            ipAddress = "192.168.1.100",
+            port = 4840,
+            opcUsername = "admin",
+            opcPassword = "password",
+            useOpcUa = true
+        ),
+        DeviceEntity(
+            id = "2",
+            name = "PLC-02",
+            ipAddress = "192.168.1.101",
+            port = 4840,
+            opcUsername = "",
+            opcPassword = "",
+            useOpcUa = true
+        )
+    )
+
+    val sampleState = ConfigUiState(
+        newDeviceName = "",
+        newDeviceIp = "",
+        newDevicePort = "4840",
+        newDeviceUsername = "",
+        newDevicePassword = "",
+        deviceList = sampleDevices,
+        currentDevice = sampleDevices.first(),
+        errorMessage = null
+    )
+
+    ConfigScreen(
+        uiState = sampleState,
+        connectionState = ControlViewModel.ConnectionState.Connected,
+        onNewDeviceNameChanged = {},
+        onNewDeviceIpChanged = {},
+        onNewDevicePortChanged = {},
+        onNewDeviceUsernameChanged = {},
+        onNewDevicePasswordChanged = {},
+        onAddDevice = {},
+        onRemoveDevice = {},
+        onSelectDevice = {}
+    )
 }

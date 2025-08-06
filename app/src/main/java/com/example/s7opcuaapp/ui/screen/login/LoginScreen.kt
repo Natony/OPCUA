@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.CommonTextField
@@ -23,7 +24,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
-    ) { 
+    ) {
         Card(
             modifier = Modifier
                 .widthIn(max = 400.dp)
@@ -110,4 +111,45 @@ fun LoginScreen(
             }
         }
     }
+}
+
+// ========== PREVIEW SECTION ==========
+@Preview(showBackground = true, widthDp = 1920, heightDp = 1200)
+@Composable
+fun LoginScreenLoadingPreview() {
+    val sampleState = LoginUiState(
+        username = "admin",
+        password = "password",
+        isPasswordVisible = false,
+        isLoading = true,
+        errorMessage = null
+    )
+
+    LoginScreen(
+        uiState = sampleState,
+        onUsernameChanged = {},
+        onPasswordChanged = {},
+        onTogglePasswordVisibility = {},
+        onLoginClicked = {}
+    )
+}
+
+@Preview(showBackground = true, widthDp = 1920, heightDp = 1200)
+@Composable
+fun LoginScreenErrorPreview() {
+    val sampleState = LoginUiState(
+        username = "admin",
+        password = "",
+        isPasswordVisible = false,
+        isLoading = false,
+        errorMessage = "Invalid credentials. Please try again."
+    )
+
+    LoginScreen(
+        uiState = sampleState,
+        onUsernameChanged = {},
+        onPasswordChanged = {},
+        onTogglePasswordVisibility = {},
+        onLoginClicked = {}
+    )
 }
