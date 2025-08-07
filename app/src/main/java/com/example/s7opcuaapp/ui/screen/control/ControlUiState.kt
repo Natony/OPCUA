@@ -1,6 +1,7 @@
 package com.example.s7opcuaapp.ui.screen.control
 
 import com.example.s7opcuaapp.data.model.PlcData
+import com.example.s7opcuaapp.viewmodel.UiState
 
 data class ControlUiState(
     val plcData: PlcData = PlcData.empty(),
@@ -14,5 +15,6 @@ data class ControlUiState(
     val lockedButtons: Set<Int> = emptySet(),
     val busyButtons: Set<Int> = emptySet(),
     val isProcessing: Boolean = false,
-    val controlsBlockedByAlarm: Boolean = false
-)
+    val controlsBlockedByAlarm: Boolean = false,
+    val isLoading: Boolean = false
+) : UiState
