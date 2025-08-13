@@ -1,3 +1,4 @@
+// app/src/main/java/com/example/s7opcuaapp/data/local/AppDatabase.kt
 package com.example.s7opcuaapp.data.local
 
 import android.content.Context
@@ -14,8 +15,10 @@ import com.example.s7opcuaapp.data.local.dao.*
         LoginHistory::class,
         DeviceAccessLog::class,
         DeviceEntity::class,
+        Alarm::class,           // Add this
+        AlarmConfig::class      // Add this
     ],
-    version = 1,
+    version = 2,  // Increment version
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -25,6 +28,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun loginHistoryDao(): LoginHistoryDao
     abstract fun deviceAccessLogDao(): DeviceAccessLogDao
     abstract fun deviceDao(): DeviceDao
+    abstract fun alarmDao(): AlarmDao           // Add this
+    abstract fun alarmConfigDao(): AlarmConfigDao  // Add this
 
     companion object {
         @Volatile
