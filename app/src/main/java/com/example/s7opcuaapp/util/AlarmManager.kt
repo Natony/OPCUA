@@ -9,7 +9,12 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import com.example.s7opcuaapp.data.local.PrefsManager
-import com.example.s7opcuaapp.data.model.*
+import com.example.s7opcuaapp.data.model.alarm.Alarm
+import com.example.s7opcuaapp.data.model.alarm.AlarmCategory
+import com.example.s7opcuaapp.data.model.alarm.AlarmConfig
+import com.example.s7opcuaapp.data.model.alarm.AlarmPriority
+import com.example.s7opcuaapp.data.model.alarm.AlarmState
+import com.example.s7opcuaapp.data.model.alarm.AlarmStatistics
 import com.example.s7opcuaapp.data.repository.AlarmRepository
 import com.example.s7opcuaapp.data.repository.S7Repository
 import kotlinx.coroutines.*

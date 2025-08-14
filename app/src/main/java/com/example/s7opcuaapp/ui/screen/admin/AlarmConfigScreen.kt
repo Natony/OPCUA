@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.s7opcuaapp.data.model.*
+import com.example.s7opcuaapp.data.model.alarm.AlarmConfig
 import com.example.s7opcuaapp.viewmodel.AlarmConfigViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

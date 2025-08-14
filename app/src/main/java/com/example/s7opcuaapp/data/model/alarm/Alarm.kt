@@ -1,9 +1,10 @@
 // app/src/main/java/com/example/s7opcuaapp/data/model/Alarm.kt
-package com.example.s7opcuaapp.data.model
+package com.example.s7opcuaapp.data.model.alarm
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Index
+import java.util.UUID
 
 @Entity(
     tableName = "alarms",
@@ -16,7 +17,7 @@ import androidx.room.Index
 )
 data class Alarm(
     @PrimaryKey
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val alarmCode: Int,           // Mã lỗi từ PLC (1, 2, 3...)
     val priority: AlarmPriority,   // Mức độ ưu tiên
     val category: AlarmCategory,   // Loại alarm

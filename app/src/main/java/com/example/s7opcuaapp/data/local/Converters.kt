@@ -1,9 +1,9 @@
 package com.example.s7opcuaapp.data.local
 
 import androidx.room.TypeConverter
-import com.example.s7opcuaapp.data.model.AlarmCategory
-import com.example.s7opcuaapp.data.model.AlarmPriority
-import com.example.s7opcuaapp.data.model.AlarmState
+import com.example.s7opcuaapp.data.model.alarm.AlarmCategory
+import com.example.s7opcuaapp.data.model.alarm.AlarmPriority
+import com.example.s7opcuaapp.data.model.alarm.AlarmState
 import com.example.s7opcuaapp.data.model.UserRole
 import com.example.s7opcuaapp.data.model.LoginStatus
 import com.example.s7opcuaapp.data.model.DeviceAction

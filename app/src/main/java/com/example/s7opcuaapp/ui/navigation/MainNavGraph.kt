@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.s7opcuaapp.data.local.PrefsManager
+import com.example.s7opcuaapp.ui.screen.alarm.AlarmScreen
 import com.example.s7opcuaapp.ui.screen.config.ConfigScreen
 import com.example.s7opcuaapp.ui.screen.control.ControlScreen
 import com.example.s7opcuaapp.ui.screen.home.HomeScreen
@@ -197,6 +198,16 @@ fun MainNavGraph(rootNavController: NavHostController) {
                         controlViewModel.continueOffline()
                     }
                 )
+            }
+
+            composable("alarm") {
+                val alarmViewModel: AlarmViewModel = hiltViewModel()
+                AlarmScreen(navController = topNavController)
+            }
+
+            composable("alarm_history") {
+                // Alarm History Screen (if needed)
+                // AlarmHistoryScreen(navController = topNavController)
             }
 
             composable("home") {

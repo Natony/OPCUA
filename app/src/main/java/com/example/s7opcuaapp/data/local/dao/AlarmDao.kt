@@ -2,7 +2,8 @@
 package com.example.s7opcuaapp.data.local.dao
 
 import androidx.room.*
-import com.example.s7opcuaapp.data.model.*
+import com.example.s7opcuaapp.data.model.alarm.Alarm
+import com.example.s7opcuaapp.data.model.alarm.AlarmConfig
 import kotlinx.coroutines.flow.Flow
 
 @Dao

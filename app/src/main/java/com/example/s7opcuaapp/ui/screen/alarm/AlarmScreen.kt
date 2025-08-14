@@ -1,7 +1,6 @@
 // app/src/main/java/com/example/s7opcuaapp/ui/screen/alarm/AlarmScreen.kt
 package com.example.s7opcuaapp.ui.screen.alarm
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -22,6 +21,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.s7opcuaapp.data.model.*
+import com.example.s7opcuaapp.data.model.alarm.Alarm
+import com.example.s7opcuaapp.data.model.alarm.AlarmPriority
+import com.example.s7opcuaapp.data.model.alarm.AlarmState
+import com.example.s7opcuaapp.data.model.alarm.AlarmStatistics
 import com.example.s7opcuaapp.viewmodel.AlarmViewModel
 import java.text.SimpleDateFormat
 import java.util.*

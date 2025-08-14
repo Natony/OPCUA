@@ -8,6 +8,8 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.s7opcuaapp.data.model.*
 import com.example.s7opcuaapp.data.local.dao.*
+import com.example.s7opcuaapp.data.model.alarm.Alarm
+import com.example.s7opcuaapp.data.model.alarm.AlarmConfig
 
 @Database(
     entities = [

@@ -3,7 +3,8 @@ package com.example.s7opcuaapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.s7opcuaapp.data.model.*
+import com.example.s7opcuaapp.data.model.alarm.Alarm
+import com.example.s7opcuaapp.data.model.alarm.AlarmStatistics
 import com.example.s7opcuaapp.data.repository.AlarmRepository
 import com.example.s7opcuaapp.util.AlarmManager
 import com.example.s7opcuaapp.util.SessionManager
