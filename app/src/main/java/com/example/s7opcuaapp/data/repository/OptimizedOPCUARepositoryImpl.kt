@@ -6,6 +6,7 @@ import com.example.s7opcuaapp.data.local.AppDatabase
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.opcua.OPCUAClientManager
+import com.example.s7opcuaapp.util.ConnectionManager
 import com.example.s7opcuaapp.util.LoadingTracker
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import kotlinx.coroutines.*
@@ -21,7 +22,8 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private var device: DeviceEntity,
     private val database: AppDatabase,
     private val dataBuffer: PlcDataBuffer,
-    private val performanceMonitor: PerformanceMonitor
+    private val performanceMonitor: PerformanceMonitor,
+    private val connectionManager: ConnectionManager
 ) : S7Repository {
 
     companion object {
@@ -52,7 +54,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
     // Node Configuration
     private val boolNodeIds = (3..17).map { "ns=4;i=$it" }
-    private val intNodeIds = (18..45).map { "ns=4;i=$it" }
+    private val intNodeIds = (18..46).map { "ns=4;i=$it" }
 
     // Subscription Groups for optimized polling
     private val subscriptionGroups = mapOf(
@@ -211,7 +213,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         val nodeIndex = nodeId.substringAfter("i=").toInt()
         when (nodeIndex) {
             in 3..17 -> nodeIndex - 3   // Bool indices 0-14
-            in 18..45 -> nodeIndex - 18  // Int indices 0-27
+            in 18..46 -> nodeIndex - 18  // Int indices 0-27
             else -> -1
         }
     } catch (e: Exception) {
@@ -239,7 +241,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                     val value = dataValue.value.value as? Boolean ?: false
                     dataBuffer.updateBool(index, value)
                 }
-                in 18..45 -> {
+                in 18..46 -> {
                     val value = when (val raw = dataValue.value.value) {
                         is Int -> raw
                         is Long -> raw.toInt()

@@ -101,6 +101,15 @@ fun MainNavGraph(rootNavController: NavHostController) {
         lastRoute = currentRoute
     }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2000) // Check every 2 seconds
+            if (currentRoute == "control") {
+                controlViewModel.refreshConnectionState()
+            }
+        }
+    }
+
     // Handle connection state changes globally
     LaunchedEffect(connectionState) {
         val currentConnectionState = connectionState // Capture for smart cast

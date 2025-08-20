@@ -2,6 +2,8 @@ package com.example.s7opcuaapp.data.opcua
 
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.eclipse.milo.opcua.sdk.client.OpcUaClient
 import org.eclipse.milo.opcua.sdk.client.SessionActivityListener
 import org.eclipse.milo.opcua.sdk.client.api.UaSession
@@ -64,6 +66,12 @@ object OPCUAClientManager {
     internal var connectionLostCallback: (() -> Unit)? = null
     private var connectionRestoredCallback: (() -> Unit)? = null
 
+    private const val HEALTH_CHECK_TIMEOUT = 3000L
+    private const val MIN_HEALTH_CHECK_INTERVAL = 5000L
+
+    private val healthCheckMutex = Mutex()
+    private var lastHealthCheckTime = 0L
+
     // Fast detection flag
     @Volatile
     private var lastSessionActiveTime = 0L
@@ -102,41 +110,35 @@ object OPCUAClientManager {
     }
 
     suspend fun checkConnectionHealth(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val cli = client
-            if (cli == null || isConnectionLost.get()) {
-                return@withContext false
+        // Rate limiting
+        val now = System.currentTimeMillis()
+        if (now - lastHealthCheckTime < MIN_HEALTH_CHECK_INTERVAL) {
+            // Skip if checked recently
+            return@withContext isConnected()
+        }
+
+        healthCheckMutex.withLock {
+            lastHealthCheckTime = System.currentTimeMillis()
+
+            try {
+                val cli = client ?: return@withLock false
+
+                // Single health check with timeout
+                withTimeoutOrNull(HEALTH_CHECK_TIMEOUT) {
+                    val future = cli.readValue(
+                        0.0,
+                        TimestampsToReturn.Neither,
+                        Identifiers.Server_ServerStatus_State
+                    )
+                    future.get(HEALTH_CHECK_TIMEOUT, TimeUnit.MILLISECONDS)
+                    lastSessionActiveTime = System.currentTimeMillis()
+                    true
+                } ?: false
+
+            } catch (e: Exception) {
+                Log.e("OPCUAClient", "Health check failed", e)
+                false
             }
-
-            // More lenient time check
-            val timeSinceActive = System.currentTimeMillis() - lastSessionActiveTime
-
-            // Only flag as unhealthy if really long time
-            if (lastSessionActiveTime > 0 && timeSinceActive > SESSION_TIMEOUT * 2) {
-                Log.w("OPCUAClient", "Session timeout: ${timeSinceActive}ms > ${SESSION_TIMEOUT * 2}ms")
-                return@withContext false
-            }
-
-            // If recently active, assume healthy
-            if (timeSinceActive < SESSION_TIMEOUT / 2) {
-                return@withContext true
-            }
-
-            // Otherwise do actual health check with longer timeout
-            withTimeoutOrNull(3000L) { // Increased from 1500ms
-                val future = cli.readValue(
-                    0.0,
-                    TimestampsToReturn.Neither,
-                    Identifiers.Server_ServerStatus_State
-                )
-                future.get(3000, TimeUnit.MILLISECONDS)
-                lastSessionActiveTime = System.currentTimeMillis()
-                true
-            } ?: false
-
-        } catch (e: Exception) {
-            Log.e("OPCUAClient", "Health check failed", e)
-            false
         }
     }
 
@@ -602,5 +604,6 @@ object OPCUAClientManager {
     fun cleanup() {
         connectionMonitorJob?.cancel()
         monitorScope.cancel()
+//        stopSound() // if any
     }
 }

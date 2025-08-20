@@ -250,16 +250,21 @@ class PlcDataBuffer @Inject constructor(
      * Clean up resources
      */
     fun dispose() {
-        emitJob?.cancel()
-        bufferScope.cancel() // Cancel scope properly
+        runBlocking {
+            emitJob?.cancel()
+            emitJob?.join() // Wait for completion
 
-        // Clear all data
+            bufferScope.coroutineContext.cancelChildren()
+            bufferScope.coroutineContext[Job]?.join() // Wait for all children
+        }
+
+        // Clear data after coroutines complete
         boolBuffer.clear()
         intBuffer.clear()
         boolChanged.clear()
         intChanged.clear()
 
-        Log.d("PlcDataBuffer", "Buffer disposed and scope cancelled")
+        Log.d("PlcDataBuffer", "Buffer disposed completely")
     }
 
     /**

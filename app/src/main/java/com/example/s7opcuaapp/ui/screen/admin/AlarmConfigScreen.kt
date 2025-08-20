@@ -26,6 +26,7 @@ fun AlarmConfigScreen(
     viewModel: AlarmConfigViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showResetDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -37,6 +38,12 @@ fun AlarmConfigScreen(
                     }
                 },
                 actions = {
+                    // Reset button
+                    IconButton(onClick = { showResetDialog = true }) {
+                        Icon(Icons.Default.Refresh, "Reset to Defaults")
+                    }
+
+                    // Add button
                     IconButton(onClick = { viewModel.showAddDialog() }) {
                         Icon(Icons.Default.Add, "Add Alarm")
                     }
@@ -77,6 +84,34 @@ fun AlarmConfigScreen(
                 }
             },
             onDismiss = { viewModel.hideDialog() }
+        )
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Reset to Default Configurations?") },
+            text = {
+                Text("This will delete all custom configurations and restore default alarm settings. This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.resetToDefaults()
+                        showResetDialog = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

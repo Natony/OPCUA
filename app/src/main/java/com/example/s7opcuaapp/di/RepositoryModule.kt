@@ -6,6 +6,7 @@ import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.repository.*
 import com.example.s7opcuaapp.util.ButtonLockConfig
+import com.example.s7opcuaapp.util.ConnectionManager
 import com.example.s7opcuaapp.util.PerformanceMonitor
 import com.example.s7opcuaapp.util.StatusLockConfig
 import dagger.Module
@@ -17,6 +18,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object RepositoryModule {
+
+    @Provides
+    @Singleton
+    fun provideConnectionManager(): ConnectionManager {
+        return ConnectionManager()
+    }
 
     @Provides
     @Singleton
@@ -68,7 +75,8 @@ object RepositoryModule {
         prefsManager: PrefsManager,
         database: AppDatabase,
         dataBuffer: PlcDataBuffer,
-        performanceMonitor: PerformanceMonitor
+        performanceMonitor: PerformanceMonitor,
+        connectionManager: ConnectionManager
     ): S7Repository {
         val device = prefsManager.getCurrentDevice() ?: DeviceEntity(
             id = "default",
@@ -84,7 +92,8 @@ object RepositoryModule {
             device = device,
             database = database,
             dataBuffer = dataBuffer,
-            performanceMonitor = performanceMonitor
+            performanceMonitor = performanceMonitor,
+            connectionManager = connectionManager
         )
     }
 }

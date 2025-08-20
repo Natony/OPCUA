@@ -64,6 +64,34 @@ class AlarmManager @Inject constructor(
 
     init {
         startAlarmMonitoring()
+        initializeDefaultConfigs()
+    }
+
+    /**
+     * Initialize default alarm configurations on first run
+     */
+    private fun initializeDefaultConfigs() {
+        scope.launch {
+            try {
+                // Check if configs already exist
+                val existingConfigs = alarmRepository.getAllConfigs().first()
+
+                if (existingConfigs.isEmpty()) {
+                    Log.i("AlarmManager", "Initializing default alarm configurations...")
+
+                    // Insert all default configs
+                    AlarmDefaults.DEFAULT_ALARM_CONFIGS.forEach { config ->
+                        alarmRepository.insertConfig(config)
+                    }
+
+                    Log.i("AlarmManager", "Initialized ${AlarmDefaults.DEFAULT_ALARM_CONFIGS.size} alarm configs")
+                } else {
+                    Log.d("AlarmManager", "Alarm configs already exist: ${existingConfigs.size}")
+                }
+            } catch (e: Exception) {
+                Log.e("AlarmManager", "Error initializing default configs", e)
+            }
+        }
     }
 
     private fun startAlarmMonitoring() {
@@ -290,12 +318,13 @@ class AlarmManager @Inject constructor(
     }
 
     private fun createDefaultConfig(code: Int): AlarmConfig {
-        return AlarmConfig(
+        // Try to get from defaults first
+        return AlarmDefaults.getConfigByCode(code) ?: AlarmConfig(
             alarmCode = code,
             priority = AlarmPriority.MEDIUM,
             category = AlarmCategory.PROCESS,
             message = "Alarm Code $code",
-            description = "Undefined alarm",
+            description = "Undefined alarm - Please configure in settings",
             createdBy = "system"
         )
     }

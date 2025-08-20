@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.s7opcuaapp.data.model.*
 import com.example.s7opcuaapp.data.model.alarm.AlarmConfig
 import com.example.s7opcuaapp.data.repository.AlarmRepository
+import com.example.s7opcuaapp.util.AlarmDefaults
 import com.example.s7opcuaapp.util.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -146,12 +147,60 @@ class AlarmConfigViewModel @Inject constructor(
         }
     }
 
-    fun clearMessages() {
-        _uiState.update {
-            it.copy(
-                errorMessage = null,
-                successMessage = null
-            )
+    /**
+     * Reset all configs to default
+     */
+    fun resetToDefaults() {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoading = true) }
+
+                // Delete all existing configs
+                val existingConfigs = alarmRepository.getAllConfigs().first()
+                existingConfigs.forEach { config ->
+                    alarmRepository.deleteConfig(config)
+                }
+
+                // Insert default configs
+                AlarmDefaults.DEFAULT_ALARM_CONFIGS.forEach { config ->
+                    alarmRepository.insertConfig(config)
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        successMessage = "Reset to default configurations successfully"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Failed to reset: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Import predefined config set
+     */
+    fun importConfigSet(configSet: List<AlarmConfig>) {
+        viewModelScope.launch {
+            try {
+                configSet.forEach { config ->
+                    alarmRepository.insertConfig(config)
+                }
+
+                _uiState.update {
+                    it.copy(successMessage = "Imported ${configSet.size} configurations")
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = "Import failed: ${e.message}")
+                }
+            }
         }
     }
 }
