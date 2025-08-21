@@ -24,6 +24,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @HiltViewModel
 class ControlViewModel @Inject constructor(
@@ -177,7 +178,7 @@ class ControlViewModel @Inject constructor(
                     loadingJob = viewModelScope.launch {
                         try {
                             repoImpl.observeLoadingPercent()
-                                .timeout(30000) // 30 second timeout
+                                .timeout(30.seconds) // 30 second timeout
                                 .collect { percent ->
                                     Log.d("ControlVM", "📊 Loading progress: $percent%")
 
@@ -231,6 +232,37 @@ class ControlViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    private fun handleConnectionTimeout() {
+        Log.w("ControlVM", "⏰ Connection timeout occurred")
+
+        connectionStarted = false
+
+        _connectionState.value = ConnectionState.Timeout
+
+        _uiState.update {
+            it.copy(
+                errorMessage = "Connection timeout - PLC not responding",
+                loadingPercent = -1,
+                busyButtons = emptySet()
+            )
+        }
+
+        // Check if we should auto-retry
+        if (connectionAttempts < maxRetryAttempts && !isOfflineMode && !isShowingTimeoutDialog) {
+            viewModelScope.launch {
+                Log.d("ControlVM", "Will retry after timeout in 3 seconds...")
+                delay(3000)
+
+                // Check if we should still retry
+                if (!isOfflineMode && !isShowingTimeoutDialog && !connectionStarted) {
+                    startConnection()
+                }
+            }
+        } else if (connectionAttempts >= maxRetryAttempts) {
+            handleMaxRetriesExceeded()
         }
     }
 
