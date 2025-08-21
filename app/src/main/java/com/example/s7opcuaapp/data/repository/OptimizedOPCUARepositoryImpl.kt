@@ -42,7 +42,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val connectionLostScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val connectionMutex = Mutex()
-    private val loadingTracker = LoadingTracker<String>(43) // 15 bool + 28 int nodes
+    private val loadingTracker = LoadingTracker<String>(44) // 15 bool + 29 int nodes
 
     // Connection State
     private val isStarted = AtomicBoolean(false)
@@ -68,8 +68,12 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
     init {
         synchronized(instanceLock) {
-            activeInstance?.let {
-                runBlocking { it.forceStop() }
+            activeInstance?.let { existingInstance ->
+                Log.w(TAG, "Forcefully stopping existing instance")
+                runBlocking {
+                    existingInstance.forceStop()
+                    delay(1000)  // Wait for cleanup
+                }
             }
             activeInstance = this
         }
@@ -106,44 +110,85 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
                     // Cleanup before connection
                     if (consecutiveFailures > 0) {
-                        OPCUAClientManager.disconnect()
+                        try {
+                            OPCUAClientManager.disconnect()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error during cleanup", e)
+                        }
                         delay(minOf(2000L * consecutiveFailures, 10000L))
                     }
 
-                    // Connect
-                    if (connect()) {
+                    // Connect with proper error handling
+                    val connected = try {
+                        connect()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Connection attempt failed", e)
+                        false
+                    }
+
+                    if (connected) {
                         consecutiveFailures = 0
                         isConnected.set(true)
-                        setupSubscriptions()
-                        Log.d(TAG, "Connected successfully")
+
+                        try {
+                            setupSubscriptions()
+                            Log.d(TAG, "Connected successfully")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to setup subscriptions", e)
+                            isConnected.set(false)
+                            loadingTracker.setError()
+                            throw e
+                        }
                     } else {
                         consecutiveFailures++
+                        loadingTracker.setError()
+
                         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                            loadingTracker.setError()
+                            Log.e(TAG, "Max consecutive failures reached")
                             break
                         }
+
                         delay(minOf(5000L * consecutiveFailures, 30000L))
                     }
                 } else {
-                    // Health check
+                    // Health check with error handling
                     delay(HEALTH_CHECK_INTERVAL)
-                    if (!OPCUAClientManager.checkConnectionHealth()) {
-                        Log.w(TAG, "Connection unhealthy")
+
+                    try {
+                        if (!OPCUAClientManager.checkConnectionHealth()) {
+                            Log.w(TAG, "Connection unhealthy")
+                            isConnected.set(false)
+                            loadingTracker.setError()
+                            OPCUAClientManager.connectionLostCallback?.invoke()
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Health check error", e)
                         isConnected.set(false)
                         loadingTracker.setError()
-                        OPCUAClientManager.connectionLostCallback?.invoke()
                     }
                 }
+            } catch (e: CancellationException) {
+                // Normal cancellation
+                Log.d(TAG, "Connection loop cancelled")
+                break
             } catch (e: Exception) {
                 Log.e(TAG, "Connection loop error", e)
                 isConnected.set(false)
                 consecutiveFailures++
+
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                     loadingTracker.setError()
+                    break
                 }
+
                 delay(5000)
             }
         }
+
+        // Cleanup on exit
+        Log.d(TAG, "Connection loop ended")
+        isConnected.set(false)
+        loadingTracker.setError()
     }
 
     private suspend fun enforceRateLimit() {
@@ -178,6 +223,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     }
 
     private suspend fun setupSubscriptions() {
+        val subscribedNodes = mutableSetOf<String>()  // Track already subscribed nodes
         var totalSubscriptions = 0
 
         subscriptionGroups.forEach { (groupName, config) ->
@@ -185,6 +231,11 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             Log.d(TAG, "Subscribing $groupName group (${nodeIds.size} nodes, ${interval}ms)")
 
             nodeIds.forEach { nodeId ->
+                if (subscribedNodes.contains(nodeId)) {
+                    Log.w(TAG, "Node $nodeId already subscribed, skipping")
+                    return@forEach
+                }
+
                 try {
                     val index = getNodeIndex(nodeId)
                     if (index >= 0) {
@@ -195,8 +246,9 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
                             handleDataUpdate(nodeId, index, dataValue)
                         }
 
+                        subscribedNodes.add(nodeId)
                         totalSubscriptions++
-                        loadingTracker.markLoaded(nodeId)
+                        loadingTracker.markLoaded(nodeId)  // Only mark once
                     }
                     delay(20)
                 } catch (e: Exception) {

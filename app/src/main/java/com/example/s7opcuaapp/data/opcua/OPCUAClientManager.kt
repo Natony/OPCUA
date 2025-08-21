@@ -319,12 +319,28 @@ object OPCUAClientManager {
                 }
             } catch (e: Exception) {
                 Log.e("OPCUAClient", "❌ Discovery error", e)
-                throw e
+                throw Exception("Discovery timeout - PLC not responding")
+            }catch (e: Exception) {
+                when {
+                    e.message?.contains("Connection refused") == true ->
+                        throw Exception("Connection refused - Check if PLC is running on $endpointUrl")
+                    e.message?.contains("UnknownHostException") == true ->
+                        throw Exception("Unknown host - Check IP address: $ipAddress")
+                    e.message?.contains("SocketTimeoutException") == true ->
+                        throw Exception("Network timeout - Check network connection")
+                    else ->
+                        throw Exception("Discovery failed: ${e.message}")
+                }
+            }
+
+            // Check if we got endpoints
+            if (endpoints.isEmpty()) {
+                throw Exception("No OPC UA endpoints found at $endpointUrl")
             }
 
             val noSecEndpoint = endpoints.firstOrNull {
                 it.securityPolicyUri == SecurityPolicy.None.uri
-            } ?: throw Exception("No SecurityPolicy.None endpoint found")
+            } ?: throw Exception("No SecurityPolicy.None endpoint found - Check PLC security settings")
 
             val tokenPoliciesList = noSecEndpoint.userIdentityTokens?.toList() ?: emptyList()
 
@@ -379,6 +395,9 @@ object OPCUAClientManager {
             lastSessionActiveTime = System.currentTimeMillis()
             true
 
+        } catch (e: CancellationException) {
+            Log.d("OPCUAClient", "Connection cancelled")
+            false
         } catch (e: Exception) {
             Log.e("OPCUAClient", "❌ Connection failed", e)
             handleConnectionLost("Connect failed: ${e.message}")

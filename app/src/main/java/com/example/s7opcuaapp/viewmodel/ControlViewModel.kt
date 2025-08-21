@@ -151,12 +151,168 @@ class ControlViewModel @Inject constructor(
     fun startConnection() {
         viewModelScope.launch {
             connectionMutex.withLock {
-                if (connectionStarted) return@withLock
+                if (connectionStarted) {
+                    Log.d("ControlVM", "Connection already in progress")
+                    return@withLock
+                }
 
-                connectionManager.reconnectWithBackoff {
-                    // Your connection logic
-                    repoImpl.start()
-                    true // return success
+                Log.d("ControlVM", "🚀 Starting connection attempt $connectionAttempts")
+
+                connectionStarted = true
+                connectionAttempts++
+
+                _connectionState.value = ConnectionState.Connecting(connectionAttempts)
+                _uiState.update {
+                    it.copy(
+                        errorMessage = null,
+                        loadingPercent = 0
+                    )
+                }
+
+                // Setup loading monitoring với error handling
+                var loadingJob: Job? = null
+
+                try {
+                    // Monitor loading với timeout
+                    loadingJob = viewModelScope.launch {
+                        try {
+                            repoImpl.observeLoadingPercent()
+                                .timeout(30000) // 30 second timeout
+                                .collect { percent ->
+                                    Log.d("ControlVM", "📊 Loading progress: $percent%")
+
+                                    _uiState.update { it.copy(loadingPercent = percent) }
+
+                                    when (percent) {
+                                        100 -> {
+                                            Log.d("ControlVM", "✅ Loading complete!")
+                                            handleLoadingComplete()
+                                        }
+                                        -1 -> {
+                                            Log.e("ControlVM", "❌ Loading error")
+                                            // Don't throw here, let handleConnectionError handle it
+                                            handleConnectionError(Exception("Loading failed"))
+                                        }
+                                    }
+                                }
+                        } catch (e: TimeoutCancellationException) {
+                            Log.e("ControlVM", "Loading timeout")
+                            handleConnectionTimeout()
+                        } catch (e: CancellationException) {
+                            Log.d("ControlVM", "Loading cancelled")
+                            // Normal cancellation, don't treat as error
+                        } catch (e: Exception) {
+                            Log.e("ControlVM", "Loading monitor error", e)
+                            handleConnectionError(e)
+                        }
+                    }
+
+                    // Start repository with timeout
+                    withTimeoutOrNull(20000) { // 20 second timeout
+                        repoImpl.start()
+                    } ?: throw Exception("Connection timeout")
+
+                } catch (e: CancellationException) {
+                    // Normal cancellation
+                    Log.d("ControlVM", "Connection cancelled")
+                    loadingJob?.cancel()
+                    connectionStarted = false
+
+                } catch (e: Exception) {
+                    Log.e("ControlVM", "Connection failed", e)
+                    loadingJob?.cancel()
+                    connectionStarted = false
+
+                    // Handle error based on attempt count
+                    if (connectionAttempts < maxRetryAttempts) {
+                        handleConnectionError(e)
+                    } else {
+                        handleMaxRetriesExceeded()
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun handleLoadingComplete() {
+        Log.d("ControlVM", "✅ Loading complete, verifying connection...")
+
+        // Delay nhỏ để đảm bảo mọi thứ sẵn sàng
+        delay(500)
+
+        // Verify actual connection
+        val isConnected = repoImpl.isConnected()
+
+        if (isConnected) {
+            Log.d("ControlVM", "✅ Connection verified successfully")
+
+            // Update state
+            _connectionState.value = ConnectionState.Connected
+            connectionAttempts = 0  // Reset attempts
+
+            // QUAN TRỌNG: connectionStarted GIỮ = true
+            // connectionStarted = true // Đã set ở trên rồi
+
+            // Start data observation
+            startOptimizedDataObservation()
+
+            // Start connection monitoring
+            startConnectionMonitoring()
+
+        } else {
+            Log.e("ControlVM", "❌ Loading complete but not connected")
+            connectionStarted = false
+
+            handleConnectionError(
+                Exception("Loading complete but connection verification failed")
+            )
+        }
+    }
+
+    fun forceFixConnection() {
+        viewModelScope.launch {
+            Log.w("ControlVM", "🔧 Force fixing connection state...")
+
+            val repoConnected = repoImpl.isConnected()
+
+            if (repoConnected) {
+                connectionStarted = true
+                _connectionState.value = ConnectionState.Connected
+                _uiState.update { it.copy(loadingPercent = 100) }
+
+                // Start data observation if not running
+                if (dataObservationJob?.isActive != true) {
+                    startOptimizedDataObservation()
+                }
+
+                Log.d("ControlVM", "✅ Connection state fixed")
+            } else {
+                Log.e("ControlVM", "❌ Cannot fix - repository not connected")
+                resetConnection()
+            }
+        }
+    }
+
+    private suspend fun monitorLoadingProgress() {
+        var hasCompleted = false
+
+        viewModelScope.launch {
+            repoImpl.observeLoadingPercent().collect { percent ->
+                Log.d("ControlVM", "Loading progress: $percent%")
+
+                _uiState.update { it.copy(loadingPercent = percent) }
+
+                when (percent) {
+                    100 -> {
+                        if (!hasCompleted) {
+                            hasCompleted = true
+                            handleLoadingComplete()
+                        }
+                    }
+                    -1 -> {
+                        // Error during loading
+                        throw Exception("Loading failed")
+                    }
                 }
             }
         }
@@ -164,85 +320,63 @@ class ControlViewModel @Inject constructor(
 
     private fun handleConnectionError(error: Exception) {
         Log.e("ControlVM", "Connection error on attempt $connectionAttempts", error)
+
+        // Ensure we're not in a bad state
         connectionStarted = false
 
         viewModelScope.launch {
-            // DON'T show duplicate dialogs
-            if (connectionAttempts < maxRetryAttempts) {
-                _connectionState.value = ConnectionState.Failed(
-                    error.message ?: "Connection failed",
-                    connectionAttempts
+            // Update state based on error type and attempt count
+            val errorMessage = when {
+                error.message?.contains("timeout", ignoreCase = true) == true ->
+                    "Connection timeout (attempt $connectionAttempts/$maxRetryAttempts)"
+                error.message?.contains("refused", ignoreCase = true) == true ->
+                    "Connection refused - Check if PLC is running"
+                error.message?.contains("unreachable", ignoreCase = true) == true ->
+                    "Network unreachable - Check network connection"
+                else ->
+                    "Connection failed: ${error.message ?: "Unknown error"}"
+            }
+
+            _connectionState.value = ConnectionState.Failed(errorMessage, connectionAttempts)
+
+            _uiState.update {
+                it.copy(
+                    errorMessage = errorMessage,
+                    loadingPercent = -1
                 )
+            }
 
-                // Show error in UI but don't show dialog
-                _uiState.update {
-                    it.copy(
-                        errorMessage = "Connection failed (attempt $connectionAttempts/$maxRetryAttempts)",
-                        loadingPercent = -1
-                    )
-                }
+            // Auto retry logic
+            if (connectionAttempts < maxRetryAttempts && !isOfflineMode && !isShowingTimeoutDialog) {
+                Log.d("ControlVM", "Will retry in 3 seconds...")
 
-                // Auto retry
                 delay(3000)
-                if (!isOfflineMode && !isShowingTimeoutDialog) {
+
+                // Check if we should still retry
+                if (!isOfflineMode && !isShowingTimeoutDialog && !connectionStarted) {
                     startConnection()
                 }
-            } else {
-                // Max retries - show timeout dialog
-                _connectionState.value = ConnectionState.MaxRetriesExceeded(
-                    "Failed after $maxRetryAttempts attempts"
-                )
-                isShowingTimeoutDialog = true
+            } else if (connectionAttempts >= maxRetryAttempts) {
+                handleMaxRetriesExceeded()
             }
         }
     }
 
-    private fun updateConnectionStateBasedOnActualConnection() {
-        viewModelScope.launch {
-            val isActuallyConnected = repoImpl.isConnected()
-            val currentLoadingPercent = _uiState.value.loadingPercent
+    private fun handleMaxRetriesExceeded() {
+        Log.e("ControlVM", "Max retries exceeded after $maxRetryAttempts attempts")
 
-            val newState = when {
-                isActuallyConnected && currentLoadingPercent == 100 -> {
-                    ConnectionState.Connected
-                }
-                isOfflineMode -> ConnectionState.Offline
-                currentLoadingPercent == -1 -> {
-                    ConnectionState.Failed("Connection lost", connectionAttempts)
-                }
-                currentLoadingPercent in 1..99 -> {
-                    ConnectionState.Connecting(connectionAttempts)
-                }
-                else -> ConnectionState.Idle
-            }
-
-            if (_connectionState.value != newState) {
-                _connectionState.value = newState
-            }
-        }
-    }
-
-    private fun handleConnectionTimeout() {
-        Log.e("ControlVM", "Connection timeout on attempt $connectionAttempts")
         connectionStarted = false
-        connectionTimeoutManager.cancelTimeout()
-
-        // Disable auto-retry khi showing timeout dialog
-        autoRetryEnabled = false
         isShowingTimeoutDialog = true
 
-        viewModelScope.launch {
-            if (connectionAttempts < maxRetryAttempts) {
-                _connectionState.value = ConnectionState.Failed(
-                    "Connection timeout (attempt $connectionAttempts/$maxRetryAttempts)",
-                    connectionAttempts
-                )
-                // KHÔNG auto retry ở đây
-            } else {
-                _connectionState.value = ConnectionState.MaxRetriesExceeded(
-                    "Failed to connect after $maxRetryAttempts attempts"
-                )
-            }
+        _connectionState.value = ConnectionState.MaxRetriesExceeded(
+            "Failed to connect after $maxRetryAttempts attempts"
+        )
+
+        _uiState.update {
+            it.copy(
+                errorMessage = "Unable to connect to PLC",
+                loadingPercent = -1
+            )
         }
     }
 
@@ -304,6 +438,54 @@ class ControlViewModel @Inject constructor(
         }
     }
 
+    // THÊM method helper này
+    private fun isFullyConnected(): Boolean {
+        val loading = _uiState.value.loadingPercent
+        val state = _connectionState.value
+        val repoConnected = try {
+            repoImpl.isConnected()
+        } catch (e: Exception) {
+            false
+        }
+
+        val connected = connectionStarted &&
+                state is ConnectionState.Connected &&
+                loading == 100 &&
+                repoConnected
+
+        if (!connected) {
+            Log.d("ControlVM", "Connection check: " +
+                    "started=$connectionStarted, " +
+                    "state=$state, " +
+                    "loading=$loading%, " +
+                    "repo=$repoConnected")
+        }
+
+        return connected
+    }
+
+    // THÊM method này để check trước khi thao tác
+    private fun checkConnectionBeforeOperation(): Boolean {
+        return when {
+            _connectionState.value is ConnectionState.Offline -> {
+                Log.w("ControlVM", "Cannot operate in offline mode")
+                _uiState.update {
+                    it.copy(errorMessage = "Controls disabled in offline mode")
+                }
+                false
+            }
+            !isFullyConnected() -> {
+                Log.w("ControlVM", "Cannot operate - not fully connected")
+                _uiState.update {
+                    it.copy(errorMessage = "Waiting for connection...")
+                }
+                false
+            }
+            else -> true
+        }
+    }
+
+
     private fun handleConnectionLost() {
         Log.w("ControlVM", "🔌 Connection lost detected!")
 
@@ -315,34 +497,38 @@ class ControlViewModel @Inject constructor(
         connectionStarted = false
 
         // Set Failed state with clear message
-        _connectionState.value = ConnectionState.Failed("Connection lost", 0)
+        _connectionState.value = ConnectionState.Failed("Connection lost", connectionAttempts)
 
         _uiState.update {
             it.copy(
                 errorMessage = "Connection to PLC lost - Reconnecting...",
-                loadingPercent = -1
+                loadingPercent = -1,
+                busyButtons = emptySet()  // Clear busy states
             )
         }
 
-        // Auto retry if not in offline mode
-        if (!isOfflineMode && !isShowingTimeoutDialog) {
+        // Release all pressed buttons
+        viewModelScope.launch {
+            releaseAllButtons()
+        }
+
+        // Auto retry if not in offline mode and not showing timeout dialog
+        if (!isOfflineMode && !isShowingTimeoutDialog && connectionAttempts < maxRetryAttempts) {
             viewModelScope.launch {
                 Log.d("ControlVM", "🔄 Auto-reconnecting in 3 seconds...")
                 delay(3000)
 
-                // Reset attempts for reconnection
-                connectionAttempts = 0
-
-                // Clear old connection state
-                _connectionState.value = ConnectionState.Idle
-                delay(500)
-
                 // Start fresh connection
                 startConnection()
             }
+        } else if (connectionAttempts >= maxRetryAttempts) {
+            // Max retries reached
+            _connectionState.value = ConnectionState.MaxRetriesExceeded(
+                "Failed after $maxRetryAttempts attempts"
+            )
+            isShowingTimeoutDialog = true
         }
     }
-
 
     // THÊM: Cho phép tiếp tục ở chế độ offline
     fun continueOffline() {
@@ -391,16 +577,41 @@ class ControlViewModel @Inject constructor(
 
     fun refreshConnectionState() {
         viewModelScope.launch {
-            val isConnected = repoImpl.isConnected()
+            // Force connectionStarted = true if repo is connected
+            val repoConnected = try {
+                repoImpl.isConnected()
+            } catch (e: Exception) {
+                false
+            }
+
             val loadingPercent = _uiState.value.loadingPercent
+            val currentState = _connectionState.value
 
-            Log.d("ControlVM", "Refreshing connection state: connected=$isConnected, loading=$loadingPercent")
+            // Fix connectionStarted if needed
+            if (repoConnected && loadingPercent == 100 && !connectionStarted) {
+                Log.w("ControlVM", "🔧 Fixing connectionStarted flag")
+                connectionStarted = true
 
-            _connectionState.value = when {
-                isConnected && loadingPercent == 100 -> ConnectionState.Connected
-                loadingPercent in 1..99 -> ConnectionState.Connecting(connectionAttempts)
+                // Start data observation if not running
+                if (dataObservationJob?.isActive != true) {
+                    startOptimizedDataObservation()
+                }
+            }
+
+            Log.d("ControlVM", "Refresh: repo=$repoConnected, loading=$loadingPercent%, started=$connectionStarted")
+
+            val newState = when {
                 isOfflineMode -> ConnectionState.Offline
-                else -> ConnectionState.Failed("Not connected", connectionAttempts)
+                repoConnected && loadingPercent == 100 -> ConnectionState.Connected
+                loadingPercent in 1..99 -> ConnectionState.Connecting(connectionAttempts)
+                loadingPercent == -1 -> ConnectionState.Failed("Connection error", connectionAttempts)
+                connectionAttempts >= maxRetryAttempts -> ConnectionState.MaxRetriesExceeded("Max retries")
+                else -> ConnectionState.Idle
+            }
+
+            if (currentState != newState) {
+                Log.d("ControlVM", "State changed: $currentState → $newState")
+                _connectionState.value = newState
             }
         }
     }
@@ -421,6 +632,8 @@ class ControlViewModel @Inject constructor(
     private suspend fun startOptimizedDataObservation() {
         dataObservationJob?.cancel()
 
+        Log.d("ControlVM", "📊 Starting data observation...")
+
         dataObservationJob = viewModelScope.launch {
             var consecutiveErrors = 0
             val maxConsecutiveErrors = 3
@@ -430,10 +643,16 @@ class ControlViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .sample(uiUpdateThrottle.milliseconds)
                 .onEach {
-                    // Reset error count và update state khi nhận được data
+                    // Reset error count
                     consecutiveErrors = 0
 
-                    // Update connection state to Connected when receiving data
+                    // Ensure we're still marked as connected
+                    if (!connectionStarted) {
+                        Log.w("ControlVM", "Receiving data but connectionStarted=false, fixing...")
+                        connectionStarted = true
+                    }
+
+                    // Update connection state if needed
                     if (_connectionState.value !is ConnectionState.Connected) {
                         Log.d("ControlVM", "Data received - updating to Connected state")
                         _connectionState.value = ConnectionState.Connected
@@ -444,7 +663,6 @@ class ControlViewModel @Inject constructor(
                     Log.e("ControlVM", "Data observation error ($consecutiveErrors/$maxConsecutiveErrors)", err)
 
                     if (consecutiveErrors >= maxConsecutiveErrors) {
-                        // Set proper error state
                         _uiState.update {
                             it.copy(
                                 loadingPercent = -1,
@@ -455,7 +673,7 @@ class ControlViewModel @Inject constructor(
                         _connectionState.value = ConnectionState.Failed("Connection lost", 0)
                         connectionStarted = false
 
-                        // Try to reconnect unless in offline mode
+                        // Try to reconnect
                         if (!isOfflineMode) {
                             delay(2000)
                             startConnection()
@@ -721,13 +939,10 @@ class ControlViewModel @Inject constructor(
     /**
      * THREAD-SAFE: Toggle boolean with proper locking
      */
+// TÌM method onToggleBoolean và SỬA LẠI như sau:
     fun onToggleBoolean(index: Int, newValue: Boolean) {
-        // Check if in offline mode
-        if (_connectionState.value is ConnectionState.Offline) {
-            Log.w("ControlVM", "Cannot toggle boolean in offline mode")
-            _uiState.update {
-                it.copy(errorMessage = "Controls disabled in offline mode")
-            }
+        // Check connection first
+        if (!checkConnectionBeforeOperation()) {
             return
         }
 
@@ -735,12 +950,6 @@ class ControlViewModel @Inject constructor(
             _uiState.update {
                 it.copy(errorMessage = "Điều khiển bị khóa do cảnh báo hệ thống")
             }
-            return
-        }
-
-        // Check if connected first
-        if (!connectionStarted || _uiState.value.loadingPercent != 100) {
-            Log.w("ControlVM", "Cannot toggle boolean - not connected")
             return
         }
 
@@ -753,13 +962,16 @@ class ControlViewModel @Inject constructor(
                     // Write to PLC
                     repoImpl.writeBoolean(index, newValue)
 
+                    Log.d("ControlVM", "✅ Toggle boolean $index = $newValue")
+
                 } catch (e: Exception) {
                     Log.e("ControlVM", "Error toggling boolean $index", e)
                     _uiState.update { it.copy(errorMessage = e.message) }
 
                     // Check if connection lost
                     if (e.message?.contains("connection", ignoreCase = true) == true ||
-                        e.message?.contains("timeout", ignoreCase = true) == true) {
+                        e.message?.contains("timeout", ignoreCase = true) == true ||
+                        e.message?.contains("Not connected", ignoreCase = true) == true) {
                         handleConnectionLost()
                     }
                 } finally {
@@ -767,31 +979,6 @@ class ControlViewModel @Inject constructor(
                     _uiState.update { it.copy(busyButtons = it.busyButtons - index) }
                 }
             }
-        }
-    }
-
-    // Thêm hàm mới để xử lý Emergency Stop
-    private suspend fun executeEmergencyStop(activate: Boolean) {
-        try {
-            // Không lock emergency stop button
-            _uiState.update { currentState ->
-                currentState.copy(
-                    isWriting = true,
-                    busyButtons = setOf(10)
-                )
-            }
-
-            // Write to PLC
-            repoImpl.writeBoolean(10, activate)
-
-            // Delay nhỏ để PLC xử lý
-            delay(100)
-
-        } catch (e: Exception) {
-            Log.e("ControlVM", "Error in emergency stop", e)
-            _uiState.update { it.copy(errorMessage = "Emergency stop failed: ${e.message}") }
-        } finally {
-            _uiState.update { it.copy(isWriting = false) }
         }
     }
 
@@ -859,6 +1046,11 @@ class ControlViewModel @Inject constructor(
      */
     private suspend fun performButtonPress(index: Int): Boolean {
         // Check if in offline mode first
+
+        if (!checkConnectionBeforeOperation()) {
+            return false
+        }
+
         if (_connectionState.value is ConnectionState.Offline) {
             Log.w("ControlVM", "Cannot press button in offline mode")
             _uiState.update {
@@ -912,6 +1104,11 @@ class ControlViewModel @Inject constructor(
 
                         // Update UI state
                         updateButtonStates { it + index }
+
+                        // Verify connection again before writing
+                        if (!repoImpl.isConnected()) {
+                            throw Exception("Connection lost before write")
+                        }
 
                         // Write to PLC
                         repoImpl.writeBoolean(index, true)

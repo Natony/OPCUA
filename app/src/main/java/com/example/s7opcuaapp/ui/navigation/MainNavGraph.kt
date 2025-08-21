@@ -57,48 +57,66 @@ fun MainNavGraph(rootNavController: NavHostController) {
 
     // Monitor navigation and connection state
     LaunchedEffect(currentRoute) {
-        Log.d("MainNavGraph", "Route changed to: $currentRoute")
+        try {
+            Log.d("MainNavGraph", "Route changed to: $currentRoute")
 
-        when (currentRoute) {
-            "control" -> {
-                // Update current device
-                currentDevice.value = prefsManager.getCurrentDevice()
+            when (currentRoute) {
+                "control" -> {
+                    // Update current device
+                    currentDevice.value = prefsManager.getCurrentDevice()
 
-                // Always refresh connection state when returning to control
-                controlViewModel.refreshConnectionState()
+                    delay(300)
 
-                // Start connection if needed
-                when (connectionState) {
-                    is ControlViewModel.ConnectionState.Idle -> {
-                        Log.d("MainNavGraph", "Control screen - Idle state, starting connection")
-                        controlViewModel.startConnection()
+                    try {
+                        controlViewModel.refreshConnectionState()
+                    } catch (e: Exception) {
+                        Log.e("MainNavGraph", "Error refreshing state", e)
                     }
-                    is ControlViewModel.ConnectionState.Failed -> {
-                        // Only auto-reconnect if we just navigated back
-                        if (lastRoute == "config_btm" && shouldReconnect) {
-                            Log.d("MainNavGraph", "Returning from config with reconnect flag")
-                            shouldReconnect = false
-                            controlViewModel.resetConnection()
+
+                    // Refresh connection state first
+                    controlViewModel.refreshConnectionState()
+
+                    // Check current state
+                    val currentConnectionState = connectionState
+
+                    // Start connection if needed
+                    when (currentConnectionState) {
+                        is ControlViewModel.ConnectionState.Idle -> {
+                            Log.d("MainNavGraph", "Idle state, starting connection")
+                            try {
+                                controlViewModel.startConnection()
+                            } catch (e: Exception) {
+                                Log.e("MainNavGraph", "Failed to start connection", e)
+                            }
+                        }
+                        is ControlViewModel.ConnectionState.Connected -> {
+                            Log.d("MainNavGraph", "Already connected")
+                            // Verify data flow is working
+                            controlViewModel.refreshConnectionState()
+                        }
+                        is ControlViewModel.ConnectionState.Failed -> {
+                            if (lastRoute == "config_btm" && shouldReconnect) {
+                                Log.d("MainNavGraph", "Reconnecting after config")
+                                shouldReconnect = false
+                                controlViewModel.resetConnection()
+                            }
+                        }
+                        else -> {
+                            Log.d("MainNavGraph", "State: $currentConnectionState")
                         }
                     }
-                    is ControlViewModel.ConnectionState.Connected -> {
-                        Log.d("MainNavGraph", "Already connected, refreshing state")
-                        // Just refresh to ensure UI is in sync
-                        controlViewModel.refreshConnectionState()
-                    }
-                    else -> {
-                        Log.d("MainNavGraph", "Control screen - State: $connectionState")
-                    }
+                }
+
+                "config_btm" -> {
+                    // Don't stop connection when going to config
+                    Log.d("MainNavGraph", "Entered config, maintaining connection state")
                 }
             }
 
-            "config_btm" -> {
-                // Don't stop connection when going to config
-                Log.d("MainNavGraph", "Entered config, maintaining connection state")
-            }
+            lastRoute = currentRoute
+        } catch (e: Exception) {
+            Log.e("MainNavGraph", "Error in route change handler", e)
         }
-
-        lastRoute = currentRoute
     }
 
     LaunchedEffect(Unit) {
