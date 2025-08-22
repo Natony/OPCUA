@@ -102,95 +102,241 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private suspend fun connectionLoop() {
         var consecutiveFailures = 0
 
+        Log.d(TAG, "Starting connection loop...")
+
         while (isStarted.get() && repositoryScope.isActive) {
             try {
-                if (!isConnected.get()) {
-                    // Rate limiting
-                    enforceRateLimit()
-
-                    // Cleanup before connection
-                    if (consecutiveFailures > 0) {
-                        try {
-                            OPCUAClientManager.disconnect()
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error during cleanup", e)
-                        }
-                        delay(minOf(2000L * consecutiveFailures, 10000L))
+                when {
+                    // Case 1: Not connected - try to establish connection
+                    !isConnected.get() -> {
+                        handleNotConnected(consecutiveFailures)?.let { failures ->
+                            consecutiveFailures = failures
+                        } ?: break // Max failures reached, exit loop
                     }
 
-                    // Connect with proper error handling
-                    val connected = try {
-                        connect()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Connection attempt failed", e)
-                        false
-                    }
-
-                    if (connected) {
-                        consecutiveFailures = 0
-                        isConnected.set(true)
-
-                        try {
-                            setupSubscriptions()
-                            Log.d(TAG, "Connected successfully")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to setup subscriptions", e)
-                            isConnected.set(false)
-                            loadingTracker.setError()
-                            throw e
-                        }
-                    } else {
-                        consecutiveFailures++
-                        loadingTracker.setError()
-
-                        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                            Log.e(TAG, "Max consecutive failures reached")
-                            break
+                    // Case 2: Connected - perform health check
+                    else -> {
+                        val isHealthy = performHealthCheck()
+                        if (!isHealthy) {
+                            Log.w(TAG, "Health check failed, marking as disconnected")
+                            handleDisconnection()
+                            consecutiveFailures = 1 // Start counting failures again
+                        } else {
+                            consecutiveFailures = 0 // Reset on successful health check
                         }
 
-                        delay(minOf(5000L * consecutiveFailures, 30000L))
-                    }
-                } else {
-                    // Health check with error handling
-                    delay(HEALTH_CHECK_INTERVAL)
-
-                    try {
-                        if (!OPCUAClientManager.checkConnectionHealth()) {
-                            Log.w(TAG, "Connection unhealthy")
-                            isConnected.set(false)
-                            loadingTracker.setError()
-                            OPCUAClientManager.connectionLostCallback?.invoke()
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Health check error", e)
-                        isConnected.set(false)
-                        loadingTracker.setError()
+                        // Wait before next health check
+                        delay(HEALTH_CHECK_INTERVAL)
                     }
                 }
+
             } catch (e: CancellationException) {
-                // Normal cancellation
+                // Normal cancellation - exit gracefully
                 Log.d(TAG, "Connection loop cancelled")
                 break
+
             } catch (e: Exception) {
-                Log.e(TAG, "Connection loop error", e)
-                isConnected.set(false)
+                // Unexpected error
+                Log.e(TAG, "Unexpected error in connection loop", e)
                 consecutiveFailures++
 
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    loadingTracker.setError()
+                    Log.e(TAG, "Max consecutive failures reached due to errors")
+                    handleMaxFailuresReached()
                     break
                 }
 
-                delay(5000)
+                delay(calculateRetryDelay(consecutiveFailures))
             }
         }
 
-        // Cleanup on exit
+        // Cleanup when loop exits
         Log.d(TAG, "Connection loop ended")
+        handleLoopExit()
+    }
+
+    /**
+     * Handle not connected state - attempt to connect
+     * @return Updated failure count or null if max failures reached
+     */
+    private suspend fun handleNotConnected(currentFailures: Int): Int? {
+        // Check if we should give up
+        if (currentFailures >= MAX_CONSECUTIVE_FAILURES) {
+            Log.e(TAG, "Max consecutive failures reached ($currentFailures/$MAX_CONSECUTIVE_FAILURES)")
+            handleMaxFailuresReached()
+            return null
+        }
+
+        // Apply rate limiting
+        if (currentFailures > 0) {
+            val retryDelay = calculateRetryDelay(currentFailures)
+            Log.d(TAG, "Waiting ${retryDelay}ms before retry attempt ${currentFailures + 1}")
+            delay(retryDelay)
+
+            // Clean up previous connection if needed
+            cleanupPreviousConnection()
+        }
+
+        // Enforce minimum interval between connection attempts
+        enforceRateLimit()
+
+        // Attempt connection
+        Log.d(TAG, "Attempting connection (attempt ${currentFailures + 1}/$MAX_CONSECUTIVE_FAILURES)")
+
+        val connected = attemptConnection()
+
+        return if (connected) {
+            Log.d(TAG, "✅ Connection successful")
+            handleConnectionSuccess()
+            0 // Reset failure count
+        } else {
+            Log.w(TAG, "❌ Connection failed")
+            handleConnectionFailure()
+            currentFailures + 1 // Increment failure count
+        }
+    }
+
+    /**
+     * Attempt to establish connection
+     */
+    private suspend fun attemptConnection(): Boolean {
+        return try {
+            // Set callbacks before connecting
+            OPCUAClientManager.setConnectionCallbacks(
+                onLost = {
+                    connectionLostScope.launch {
+                        handleConnectionLost()
+                    }
+                },
+                onRestored = {
+                    Log.d(TAG, "Connection restored callback triggered")
+                }
+            )
+
+            // Try to connect
+            val connected = OPCUAClientManager.connect(
+                ipAddress = device.ipAddress,
+                port = device.port,
+                username = device.opcUsername.takeIf { it.isNotBlank() },
+                password = device.opcPassword.takeIf { it.isNotBlank() }
+            )
+
+            if (connected) {
+                // Setup subscriptions after successful connection
+                try {
+                    setupSubscriptions()
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to setup subscriptions", e)
+                    OPCUAClientManager.disconnect()
+                    false
+                }
+            } else {
+                false
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Connection attempt failed with exception", e)
+            false
+        }
+    }
+
+    /**
+     * Perform health check on existing connection
+     */
+    private suspend fun performHealthCheck(): Boolean {
+        return try {
+            withTimeoutOrNull(3000L) {
+                OPCUAClientManager.checkConnectionHealth()
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Health check exception", e)
+            false
+        }
+    }
+
+    /**
+     * Handle successful connection
+     */
+    private fun handleConnectionSuccess() {
+        isConnected.set(true)
+        loadingTracker.reset() // Reset for next connection if needed
+        performanceMonitor.recordNetworkLatency(System.currentTimeMillis() - lastConnectionAttempt)
+
+        // Notify success through loading tracker
+        repeat(44) { // Mark all nodes as loaded
+            loadingTracker.markLoaded("node_$it")
+        }
+    }
+
+    /**
+     * Handle connection failure
+     */
+    private fun handleConnectionFailure() {
         isConnected.set(false)
         loadingTracker.setError()
     }
 
+    /**
+     * Handle disconnection detected during health check
+     */
+    private fun handleDisconnection() {
+        isConnected.set(false)
+        loadingTracker.setError()
+
+        // Trigger connection lost callback
+        connectionLostScope.launch {
+            handleConnectionLost()
+        }
+    }
+
+    /**
+     * Handle max failures reached
+     */
+    private fun handleMaxFailuresReached() {
+        isConnected.set(false)
+        loadingTracker.setError()
+
+        // Could emit a special state or throw exception if needed
+        Log.e(TAG, "Connection loop stopping due to max failures")
+    }
+
+    /**
+     * Cleanup when connection loop exits
+     */
+    private fun handleLoopExit() {
+        isConnected.set(false)
+        loadingTracker.setError()
+
+        // Cancel any pending operations
+        connectionLostScope.cancel()
+    }
+
+    /**
+     * Calculate retry delay based on failure count (exponential backoff)
+     */
+    private fun calculateRetryDelay(failureCount: Int): Long {
+        val baseDelay = 2000L // 2 seconds
+        val maxDelay = 30000L // 30 seconds
+
+        val delay = baseDelay * (1 shl (failureCount - 1)) // Exponential backoff
+        return minOf(delay, maxDelay)
+    }
+
+    /**
+     * Cleanup previous connection attempt
+     */
+    private suspend fun cleanupPreviousConnection() {
+        try {
+            OPCUAClientManager.disconnect()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during connection cleanup", e)
+        }
+    }
+
+    /**
+     * Enforce minimum interval between connection attempts
+     */
     private suspend fun enforceRateLimit() {
         val timeSinceLastAttempt = System.currentTimeMillis() - lastConnectionAttempt
         if (timeSinceLastAttempt < MIN_CONNECTION_INTERVAL) {
@@ -199,12 +345,16 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         lastConnectionAttempt = System.currentTimeMillis()
     }
 
+
     private suspend fun connect(): Boolean = try {
-        OPCUAClientManager.setConnectionLostCallback {
-            connectionLostScope.launch {
-                handleConnectionLost()
-            }
-        }
+        OPCUAClientManager.setConnectionCallbacks(
+            onLost = {
+                connectionLostScope.launch {
+                    handleConnectionLost()
+                }
+            },
+            onRestored = null  // Không cần xử lý khi connection restored
+        )
 
         val result = OPCUAClientManager.connect(
             ipAddress = device.ipAddress,

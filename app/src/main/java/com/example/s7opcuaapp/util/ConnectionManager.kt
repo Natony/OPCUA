@@ -28,12 +28,15 @@ class ConnectionManager @Inject constructor() {
     private var retryDelay = 1000L
     private val maxRetryDelay = 30000L
 
+    // Trong ConnectionManager.kt
     fun startMonitoring(
         scope: CoroutineScope,
         checkConnection: suspend () -> Boolean,
         onConnectionLost: suspend () -> Unit
-    ) {
-        if (isMonitoring.getAndSet(true)) return
+    ): Job {  // Thêm return type Job
+        if (isMonitoring.getAndSet(true)) {
+            return monitorJob ?: scope.launch { }  // Return existing or empty job
+        }
 
         monitorJob?.cancel()
         monitorJob = scope.launch {
@@ -68,6 +71,8 @@ class ConnectionManager @Inject constructor() {
                 }
             }
         }
+
+        return monitorJob!!  // Return the job
     }
 
     suspend fun reconnectWithBackoff(
