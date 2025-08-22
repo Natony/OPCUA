@@ -3,6 +3,9 @@ package com.example.s7opcuaapp.util
 import java.security.MessageDigest
 import kotlin.experimental.and
 
+/**
+ * FIXED: Removed all password logging for security
+ */
 object PasswordUtils {
 
     enum class PasswordStrength {
@@ -11,29 +14,32 @@ object PasswordUtils {
         STRONG
     }
 
+    /**
+     * Hash password using SHA-256
+     * SECURITY: Never log passwords or hashes
+     */
     fun hashPassword(password: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
-        val hash = bytes.joinToString("") { "%02x".format(it) }
-        println("🔐 Password hashing:")
-        println("   Input: $password")
-        println("   Hash: $hash")
-        return hash
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
+    /**
+     * Verify password against hash
+     * SECURITY: Never log verification details
+     */
     fun verifyPassword(password: String, passwordHash: String): Boolean {
         val inputHash = hashPassword(password)
-        val isMatch = inputHash == passwordHash
-        println("🔍 Password verification:")
-        println("   Input: $password")
-        println("   Input hash: $inputHash")
-        println("   Stored hash: $passwordHash")
-        println("   Match: $isMatch")
-        return isMatch
+        return inputHash == passwordHash
     }
 
+    /**
+     * Validate password requirements
+     * - Minimum 6 characters
+     * - Must contain at least one letter
+     * - Must contain at least one digit
+     */
     fun isValidPassword(password: String): Boolean {
         if (password.length < 6) {
-            println("❌ Password too short: ${password.length} < 6")
             return false
         }
 
@@ -47,16 +53,12 @@ object PasswordUtils {
             }
         }
 
-        val isValid = hasLetter && hasDigit
-        println("🔍 Password validation for '$password':")
-        println("   Length: ${password.length} (${if (password.length >= 6) "✅" else "❌"})")
-        println("   Has letter: $hasLetter (${if (hasLetter) "✅" else "❌"})")
-        println("   Has digit: $hasDigit (${if (hasDigit) "✅" else "❌"})")
-        println("   Valid: $isValid")
-
-        return isValid
+        return hasLetter && hasDigit
     }
 
+    /**
+     * Get password strength assessment
+     */
     fun getPasswordStrength(password: String): PasswordStrength {
         var strength = 0
 
@@ -71,6 +73,42 @@ object PasswordUtils {
             strength <= 2 -> PasswordStrength.WEAK
             strength <= 4 -> PasswordStrength.MEDIUM
             else -> PasswordStrength.STRONG
+        }
+    }
+
+    /**
+     * Get password validation errors
+     * Returns list of error messages, empty if valid
+     */
+    fun getPasswordValidationErrors(password: String): List<String> {
+        val errors = mutableListOf<String>()
+
+        if (password.length < 6) {
+            errors.add("Password must be at least 6 characters")
+        }
+
+        if (!password.any { it.isLetter() }) {
+            errors.add("Password must contain at least one letter")
+        }
+
+        if (!password.any { it.isDigit() }) {
+            errors.add("Password must contain at least one digit")
+        }
+
+        return errors
+    }
+
+    /**
+     * Generate password strength tips
+     */
+    fun getPasswordStrengthTips(strength: PasswordStrength): String {
+        return when (strength) {
+            PasswordStrength.WEAK ->
+                "Try adding uppercase letters, numbers, and special characters"
+            PasswordStrength.MEDIUM ->
+                "Good password! Consider making it longer for better security"
+            PasswordStrength.STRONG ->
+                "Excellent password strength!"
         }
     }
 }

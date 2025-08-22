@@ -6,8 +6,11 @@ import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
 import com.example.s7opcuaapp.data.repository.*
 import com.example.s7opcuaapp.util.ButtonLockConfig
+import com.example.s7opcuaapp.util.ButtonOperationManager
 import com.example.s7opcuaapp.util.ConnectionManager
+import com.example.s7opcuaapp.util.ConnectionStateManager
 import com.example.s7opcuaapp.util.PerformanceMonitor
+import com.example.s7opcuaapp.util.PlcDataManager
 import com.example.s7opcuaapp.util.StatusLockConfig
 import dagger.Module
 import dagger.Provides
@@ -67,6 +70,28 @@ object RepositoryModule {
         database: AppDatabase
     ): LogRepository {
         return LogRepositoryImpl(database)
+    }
+
+    @Provides
+    @Singleton
+    fun provideConnectionStateManager(): ConnectionStateManager {
+        return ConnectionStateManager()
+    }
+
+    @Provides
+    @Singleton
+    fun provideButtonOperationManager(): ButtonOperationManager {
+        return ButtonOperationManager()
+    }
+
+    @Provides
+    @Singleton
+    fun providePlcDataManager(
+        buttonLockConfig: ButtonLockConfig,
+        statusLockConfig: StatusLockConfig,
+        performanceMonitor: PerformanceMonitor
+    ): PlcDataManager {
+        return PlcDataManager(buttonLockConfig, statusLockConfig, performanceMonitor)
     }
 
     // Remove @Singleton from S7Repository since it depends on device config

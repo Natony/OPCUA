@@ -40,43 +40,68 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * FIXED: Thread-safe singleton OPC UA client manager
+ */
 object OPCUAClientManager {
-    var client: OpcUaClient? = null
-        private set
 
+    private const val TAG = "OPCUAClient"
+
+    // Thread-safe client access
+    @Volatile
+    private var _client: OpcUaClient? = null
+    private val clientMutex = Mutex()
+
+    val client: OpcUaClient?
+        get() = _client
+
+    // Thread-safe subscription management
+    @Volatile
     private var subscription: UaSubscription? = null
+    private val subscriptionMutex = Mutex()
 
     // Connection state tracking
     private val isConnectionLost = AtomicBoolean(false)
 
     // Track last successful data receive time for each node
     private val lastDataReceived = ConcurrentHashMap<String, Long>()
+
+    // Connection monitoring - properly managed
+    @Volatile
     private var connectionMonitorJob: Job? = null
-    private val monitorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val monitorScope = CoroutineScope(
+        Dispatchers.IO + SupervisorJob() + CoroutineName("OPCUAMonitor")
+    )
 
     // Timeout constants
-    private const val DISCOVERY_TIMEOUT = 10000L  // Increased from 5000
-    private const val CONNECTION_TIMEOUT = 20000L // Increased from 10000
-    private const val OPERATION_TIMEOUT = 10000L  // Increased from 5000
-    private const val DATA_TIMEOUT = 15000L       // Increased from 10000
-
-    private var sessionListener: SessionActivityListener? = null
-    private var subscriptionListener: SubscriptionListener? = null
-
-    internal var connectionLostCallback: (() -> Unit)? = null
-    private var connectionRestoredCallback: (() -> Unit)? = null
-
+    private const val DISCOVERY_TIMEOUT = 10000L
+    private const val CONNECTION_TIMEOUT = 20000L
+    private const val OPERATION_TIMEOUT = 10000L
+    private const val DATA_TIMEOUT = 15000L
+    private const val HEALTH_CHECK_INTERVAL = 5000L
     private const val HEALTH_CHECK_TIMEOUT = 3000L
-    private const val MIN_HEALTH_CHECK_INTERVAL = 5000L
-
-    private val healthCheckMutex = Mutex()
-    private var lastHealthCheckTime = 0L
-
-    // Fast detection flag
-    @Volatile
-    private var lastSessionActiveTime = 0L
     private const val SESSION_TIMEOUT = 10000L
 
+    // Listener references
+    @Volatile
+    private var sessionListener: SessionActivityListener? = null
+    @Volatile
+    private var subscriptionListener: SubscriptionListener? = null
+
+    // Callbacks
+    @Volatile
+    internal var connectionLostCallback: (() -> Unit)? = null
+    @Volatile
+    private var connectionRestoredCallback: (() -> Unit)? = null
+
+    // Health check mutex to prevent concurrent checks
+    private val healthCheckMutex = Mutex()
+
+    @Volatile
+    private var lastSessionActiveTime = 0L
+
+    // Flag to control monitoring loop
+    private val isMonitoringActive = AtomicBoolean(false)
 
     fun setConnectionCallbacks(
         onLost: (() -> Unit)? = null,
@@ -87,266 +112,41 @@ object OPCUAClientManager {
     }
 
     /**
-     * Create SessionActivityListener
-     */
-    private fun createSessionListener(): SessionActivityListener {
-        return object : SessionActivityListener {
-            override fun onSessionActive(session: UaSession) {
-                Log.d("OPCUAClient", "✅ Session ACTIVE")
-                lastSessionActiveTime = System.currentTimeMillis()
-
-                // Reset connection lost flag
-                if (isConnectionLost.getAndSet(false)) {
-                    Log.d("OPCUAClient", "🔄 Connection restored")
-                    connectionRestoredCallback?.invoke()
-                }
-            }
-
-            override fun onSessionInactive(session: UaSession) {
-                Log.w("OPCUAClient", "⚠️ Session INACTIVE")
-                handleConnectionLost("Session inactive")
-            }
-        }
-    }
-
-    suspend fun checkConnectionHealth(): Boolean = withContext(Dispatchers.IO) {
-        // Rate limiting
-        val now = System.currentTimeMillis()
-        if (now - lastHealthCheckTime < MIN_HEALTH_CHECK_INTERVAL) {
-            // Skip if checked recently
-            return@withContext isConnected()
-        }
-
-        healthCheckMutex.withLock {
-            lastHealthCheckTime = System.currentTimeMillis()
-
-            try {
-                val cli = client ?: return@withLock false
-
-                // Single health check with timeout
-                withTimeoutOrNull(HEALTH_CHECK_TIMEOUT) {
-                    val future = cli.readValue(
-                        0.0,
-                        TimestampsToReturn.Neither,
-                        Identifiers.Server_ServerStatus_State
-                    )
-                    future.get(HEALTH_CHECK_TIMEOUT, TimeUnit.MILLISECONDS)
-                    lastSessionActiveTime = System.currentTimeMillis()
-                    true
-                } ?: false
-
-            } catch (e: Exception) {
-                Log.e("OPCUAClient", "Health check failed", e)
-                false
-            }
-        }
-    }
-
-    /**
-     * Create SubscriptionListener
-     */
-    private fun createSubscriptionListener(): SubscriptionListener {
-        return object : SubscriptionListener {
-            override fun onSubscriptionTransferFailed(
-                subscription: UaSubscription,
-                statusCode: StatusCode
-            ) {
-                Log.e("OPCUAClient", "❌ Subscription transfer failed: $statusCode")
-                handleConnectionLost("Subscription transfer failed")
-            }
-
-            override fun onStatusChanged(
-                subscription: UaSubscription,
-                status: StatusCode
-            ) {
-                Log.d("OPCUAClient", "Subscription status changed: $status")
-
-                if (!status.isGood) {
-                    Log.w("OPCUAClient", "⚠️ Subscription status not good: $status")
-                }
-            }
-
-            override fun onSubscriptionWatchdogTimerElapsed(subscription: UaSubscription) {
-                Log.w("OPCUAClient", "⚠️ Subscription watchdog timer elapsed")
-                handleConnectionLost("Subscription watchdog timeout")
-            }
-
-            override fun onPublishFailure(exception: UaException) {
-                Log.e("OPCUAClient", "❌ Publish failure", exception)
-
-                // Check if it's a connection-related failure
-                if (exception.statusCode.value == StatusCodes.Bad_ConnectionClosed ||
-                    exception.statusCode.value == StatusCodes.Bad_NotConnected ||
-                    exception.statusCode.value == StatusCodes.Bad_SessionClosed) {
-                    handleConnectionLost("Publish failure: ${exception.message}")
-                }
-            }
-
-            override fun onNotificationDataLost(subscription: UaSubscription) {
-                Log.w("OPCUAClient", "⚠️ Notification data lost")
-            }
-        }
-    }
-
-    /**
-     * Set callback for connection lost events
-     */
-    fun setConnectionLostCallback(callback: (() -> Unit)) {
-        connectionLostCallback = callback
-    }
-
-    /**
-     * Handle connection lost
-     */
-    private fun handleConnectionLost(reason: String) {
-        if (!isConnectionLost.getAndSet(true)) {
-            Log.e("OPCUAClient", "🔌 CONNECTION LOST: $reason")
-            connectionLostCallback?.invoke()
-        }
-    }
-
-    /**
-     * Start monitoring connection health
-     */
-    private fun startConnectionMonitor() {
-        connectionMonitorJob?.cancel()
-        connectionMonitorJob = monitorScope.launch {
-            while (isActive) {
-                delay(5000) // Check every 5 seconds instead of 2
-
-                try {
-                    val now = System.currentTimeMillis()
-
-                    // Only check if we think we're connected
-                    if (client != null && !isConnectionLost.get()) {
-                        // More lenient session check
-                        if (lastSessionActiveTime > 0) {
-                            val timeSinceActive = now - lastSessionActiveTime
-
-                            // Only worry if really long time without activity
-                            if (timeSinceActive > SESSION_TIMEOUT * 2) {
-                                Log.w("OPCUAClient", "⚠️ No session activity for ${timeSinceActive}ms")
-
-                                // Try health check before declaring lost
-                                val isHealthy = performHealthCheck()
-                                if (!isHealthy) {
-                                    handleConnectionLost("No activity and health check failed")
-                                    break
-                                }
-                            }
-                        }
-
-                        // Check data flow with more lenient timeout
-                        val hasRecentData = lastDataReceived.values.any {
-                            (now - it) < DATA_TIMEOUT * 2  // More lenient
-                        }
-
-                        // Only check if we expect data
-                        if (!hasRecentData && lastDataReceived.isNotEmpty()) {
-                            Log.w("OPCUAClient", "⚠️ No data for long time")
-
-                            // Try health check
-                            val isHealthy = performHealthCheck()
-                            if (!isHealthy) {
-                                handleConnectionLost("No data and health check failed")
-                                break
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("OPCUAClient", "Monitor error", e)
-                }
-            }
-        }
-    }
-
-    /**
-     * Perform health check by reading server state
-     */
-    private suspend fun performHealthCheck(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            client?.let { cli ->
-                // Try to read server state
-                val future = cli.readValue(
-                    0.0,
-                    TimestampsToReturn.Neither,
-                    Identifiers.Server_ServerStatus_State
-                )
-
-                val result = try {
-                    withTimeoutOrNull(1500L) {
-                        future.get(1500, TimeUnit.MILLISECONDS)
-                        true
-                    }
-                } catch (e: Exception) {
-                    Log.e("OPCUAClient", "Health check read failed: ${e.message}")
-                    false
-                } ?: false
-
-                if (result) {
-                    // Update last active time on successful health check
-                    lastSessionActiveTime = System.currentTimeMillis()
-                }
-
-                result
-            } ?: false
-        } catch (e: Exception) {
-            Log.e("OPCUAClient", "Health check exception", e)
-            false
-        }
-    }
-    /**
-     * Connect với better error handling
+     * Thread-safe connection method
      */
     suspend fun connect(
         ipAddress: String,
         port: Int,
         username: String? = null,
         password: String? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        return@withContext try {
+    ): Boolean = clientMutex.withLock {
+        return@withLock try {
+            // Reset state
             isConnectionLost.set(false)
             lastDataReceived.clear()
 
             val endpointUrl = "opc.tcp://$ipAddress:$port"
-            Log.d("OPCUAClient", "🔌 Connecting to $endpointUrl...")
+            Log.d(TAG, "🔌 Connecting to $endpointUrl...")
 
-            // Discovery với timeout
-            val endpoints: List<EndpointDescription> = try {
-                withTimeout(DISCOVERY_TIMEOUT) {
-                    val future = DiscoveryClient.getEndpoints(endpointUrl)
-                    future.get(DISCOVERY_TIMEOUT, TimeUnit.MILLISECONDS)
-                }
-            } catch (e: Exception) {
-                Log.e("OPCUAClient", "❌ Discovery error", e)
-                throw Exception("Discovery timeout - PLC not responding")
-            }catch (e: Exception) {
-                when {
-                    e.message?.contains("Connection refused") == true ->
-                        throw Exception("Connection refused - Check if PLC is running on $endpointUrl")
-                    e.message?.contains("UnknownHostException") == true ->
-                        throw Exception("Unknown host - Check IP address: $ipAddress")
-                    e.message?.contains("SocketTimeoutException") == true ->
-                        throw Exception("Network timeout - Check network connection")
-                    else ->
-                        throw Exception("Discovery failed: ${e.message}")
-                }
-            }
+            // Discovery with timeout
+            val endpoints = withTimeoutOrNull(DISCOVERY_TIMEOUT) {
+                DiscoveryClient.getEndpoints(endpointUrl)
+                    .get(DISCOVERY_TIMEOUT, TimeUnit.MILLISECONDS)
+            } ?: throw Exception("Discovery timeout - PLC not responding")
 
-            // Check if we got endpoints
             if (endpoints.isEmpty()) {
                 throw Exception("No OPC UA endpoints found at $endpointUrl")
             }
 
             val noSecEndpoint = endpoints.firstOrNull {
                 it.securityPolicyUri == SecurityPolicy.None.uri
-            } ?: throw Exception("No SecurityPolicy.None endpoint found - Check PLC security settings")
+            } ?: throw Exception("No SecurityPolicy.None endpoint found")
 
-            val tokenPoliciesList = noSecEndpoint.userIdentityTokens?.toList() ?: emptyList()
+            val tokenPolicies = noSecEndpoint.userIdentityTokens?.toList() ?: emptyList()
 
             val identityProvider = when {
                 !username.isNullOrBlank() &&
-                        tokenPoliciesList.any { it.tokenType == UserTokenType.UserName } -> {
+                        tokenPolicies.any { it.tokenType == UserTokenType.UserName } -> {
                     UsernameProvider(username, password ?: "")
                 }
                 else -> AnonymousProvider()
@@ -361,66 +161,226 @@ object OPCUAClientManager {
                 .setKeepAliveInterval(UInteger.valueOf(5000))
                 .build()
 
-            client = OpcUaClient.create(config)
+            // Create and connect client
+            _client = OpcUaClient.create(config)
 
-            // Connect với timeout
-            try {
-                withTimeout(CONNECTION_TIMEOUT) {
-                    val connectFuture = client!!.connect()
-                    connectFuture.get(CONNECTION_TIMEOUT, TimeUnit.MILLISECONDS)
-                }
-            } catch (e: Exception) {
-                Log.e("OPCUAClient", "❌ Connect error", e)
-                client = null
-                throw e
+            withTimeout(CONNECTION_TIMEOUT) {
+                _client!!.connect().get(CONNECTION_TIMEOUT, TimeUnit.MILLISECONDS)
             }
 
             // Add listeners after successful connection
-            client?.let { cli ->
-                // Add session listener
-                sessionListener = createSessionListener()
-                cli.addSessionActivityListener(sessionListener!!)
+            setupListeners()
 
-                // Add subscription listener
-                subscriptionListener = createSubscriptionListener()
-                cli.subscriptionManager.addSubscriptionListener(subscriptionListener!!)
-
-                Log.d("OPCUAClient", "✅ All listeners registered")
-            }
-
-            // Start connection monitor
+            // Start monitoring with proper control
             startConnectionMonitor()
 
-            Log.d("OPCUAClient", "✅ Connected successfully")
+            Log.d(TAG, "✅ Connected successfully")
             lastSessionActiveTime = System.currentTimeMillis()
             true
 
         } catch (e: CancellationException) {
-            Log.d("OPCUAClient", "Connection cancelled")
+            Log.d(TAG, "Connection cancelled")
             false
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "❌ Connection failed", e)
+            Log.e(TAG, "❌ Connection failed", e)
             handleConnectionLost("Connect failed: ${e.message}")
             false
         }
     }
 
     /**
-     * Create subscription với data tracking
+     * Setup listeners safely
+     */
+    private fun setupListeners() {
+        _client?.let { cli ->
+            // Remove old listeners first
+            sessionListener?.let { cli.removeSessionActivityListener(it) }
+            subscriptionListener?.let { cli.subscriptionManager.removeSubscriptionListener(it) }
+
+            // Add new listeners
+            sessionListener = createSessionListener()
+            cli.addSessionActivityListener(sessionListener!!)
+
+            subscriptionListener = createSubscriptionListener()
+            cli.subscriptionManager.addSubscriptionListener(subscriptionListener!!)
+
+            Log.d(TAG, "✅ All listeners registered")
+        }
+    }
+
+    /**
+     * Create session listener
+     */
+    private fun createSessionListener(): SessionActivityListener {
+        return object : SessionActivityListener {
+            override fun onSessionActive(session: UaSession) {
+                Log.d(TAG, "✅ Session ACTIVE")
+                lastSessionActiveTime = System.currentTimeMillis()
+
+                if (isConnectionLost.getAndSet(false)) {
+                    Log.d(TAG, "🔄 Connection restored")
+                    connectionRestoredCallback?.invoke()
+                }
+            }
+
+            override fun onSessionInactive(session: UaSession) {
+                Log.w(TAG, "⚠️ Session INACTIVE")
+                handleConnectionLost("Session inactive")
+            }
+        }
+    }
+
+    /**
+     * Create subscription listener
+     */
+    private fun createSubscriptionListener(): SubscriptionListener {
+        return object : SubscriptionListener {
+            override fun onSubscriptionTransferFailed(
+                subscription: UaSubscription,
+                statusCode: StatusCode
+            ) {
+                Log.e(TAG, "❌ Subscription transfer failed: $statusCode")
+                handleConnectionLost("Subscription transfer failed")
+            }
+
+            override fun onStatusChanged(
+                subscription: UaSubscription,
+                status: StatusCode
+            ) {
+                Log.d(TAG, "Subscription status changed: $status")
+                if (!status.isGood) {
+                    Log.w(TAG, "⚠️ Subscription status not good: $status")
+                }
+            }
+
+            override fun onSubscriptionWatchdogTimerElapsed(subscription: UaSubscription) {
+                Log.w(TAG, "⚠️ Subscription watchdog timer elapsed")
+                handleConnectionLost("Subscription watchdog timeout")
+            }
+
+            override fun onPublishFailure(exception: UaException) {
+                Log.e(TAG, "❌ Publish failure", exception)
+
+                if (exception.statusCode.value == StatusCodes.Bad_ConnectionClosed ||
+                    exception.statusCode.value == StatusCodes.Bad_NotConnected ||
+                    exception.statusCode.value == StatusCodes.Bad_SessionClosed) {
+                    handleConnectionLost("Publish failure: ${exception.message}")
+                }
+            }
+
+            override fun onNotificationDataLost(subscription: UaSubscription) {
+                Log.w(TAG, "⚠️ Notification data lost")
+            }
+        }
+    }
+
+    /**
+     * Start monitoring with proper lifecycle management
+     */
+    private fun startConnectionMonitor() {
+        // Cancel any existing monitor
+        connectionMonitorJob?.cancel()
+
+        // Set monitoring active flag
+        isMonitoringActive.set(true)
+
+        connectionMonitorJob = monitorScope.launch {
+            Log.d(TAG, "📡 Starting connection monitoring")
+
+            while (isActive && isMonitoringActive.get()) {
+                try {
+                    delay(HEALTH_CHECK_INTERVAL)
+
+                    // Skip if no client or already lost
+                    if (_client == null || isConnectionLost.get()) {
+                        continue
+                    }
+
+                    // Check session timeout
+                    val now = System.currentTimeMillis()
+                    if (lastSessionActiveTime > 0) {
+                        val timeSinceActive = now - lastSessionActiveTime
+                        if (timeSinceActive > SESSION_TIMEOUT * 2) {
+                            Log.w(TAG, "⚠️ No session activity for ${timeSinceActive}ms")
+
+                            val isHealthy = checkConnectionHealth()
+                            if (!isHealthy) {
+                                handleConnectionLost("No activity and health check failed")
+                                break
+                            }
+                        }
+                    }
+
+                    // Check data flow
+                    val hasRecentData = lastDataReceived.values.any {
+                        (now - it) < DATA_TIMEOUT * 2
+                    }
+
+                    if (!hasRecentData && lastDataReceived.isNotEmpty()) {
+                        Log.w(TAG, "⚠️ No data for long time")
+
+                        val isHealthy = checkConnectionHealth()
+                        if (!isHealthy) {
+                            handleConnectionLost("No data and health check failed")
+                            break
+                        }
+                    }
+
+                } catch (e: CancellationException) {
+                    // Normal cancellation
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Monitor error", e)
+                }
+            }
+
+            Log.d(TAG, "📡 Connection monitoring stopped")
+        }
+    }
+
+    /**
+     * Thread-safe health check
+     */
+    suspend fun checkConnectionHealth(): Boolean = healthCheckMutex.withLock {
+        try {
+            _client?.let { cli ->
+                val result = withTimeoutOrNull(HEALTH_CHECK_TIMEOUT) {
+                    cli.readValue(
+                        0.0,
+                        TimestampsToReturn.Neither,
+                        Identifiers.Server_ServerStatus_State
+                    ).get(HEALTH_CHECK_TIMEOUT, TimeUnit.MILLISECONDS)
+                    true
+                } ?: false
+
+                if (result) {
+                    lastSessionActiveTime = System.currentTimeMillis()
+                }
+
+                return@withLock result
+            } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Health check exception", e)
+            false
+        }
+    }
+
+    /**
+     * Thread-safe subscription creation
      */
     suspend fun createSubscription(
         nodeIdString: String,
         samplingInterval: UInteger = UInteger.valueOf(250),
         onValueChange: (DataValue) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        val cli = client ?: return@withContext
+    ) = subscriptionMutex.withLock {
+        val cli = _client ?: return@withLock
 
         try {
             withTimeout(OPERATION_TIMEOUT) {
                 if (subscription == null) {
                     val subFuture = cli.subscriptionManager.createSubscription(250.0)
                     subscription = subFuture.get(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS)
-                    Log.d("OPCUAClient", "📡 Subscription created")
+                    Log.d(TAG, "📡 Subscription created")
                 }
 
                 val sub = subscription!!
@@ -462,20 +422,19 @@ object OPCUAClientManager {
 
                             // Reset connection lost flag
                             if (isConnectionLost.getAndSet(false)) {
-                                Log.d("OPCUAClient", "✅ Connection restored - data received")
+                                Log.d(TAG, "✅ Connection restored - data received")
                             }
 
                             onValueChange(dataValue)
                         } catch (e: Exception) {
-                            Log.w("OPCUAClient", "Error in value consumer", e)
+                            Log.w(TAG, "Error in value consumer", e)
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "❌ Subscription error", e)
+            Log.e(TAG, "❌ Subscription error", e)
 
-            // Check if it's a connection error
             if (e.message?.contains("Bad_", ignoreCase = true) == true ||
                 e.message?.contains("timeout", ignoreCase = true) == true) {
                 handleConnectionLost("Subscription failed: ${e.message}")
@@ -485,74 +444,93 @@ object OPCUAClientManager {
     }
 
     /**
-     * Write node với connection error detection
+     * Thread-safe write operation
      */
-    suspend fun writeNode(nodeIdString: String, rawValue: Any): StatusCode? = withContext(Dispatchers.IO) {
-        val cli = client ?: return@withContext null
+    suspend fun writeNode(nodeIdString: String, rawValue: Any): StatusCode? =
+        withContext(Dispatchers.IO) {
+            val cli = _client ?: return@withContext null
 
-        try {
-            withTimeout(OPERATION_TIMEOUT) {
-                val nodeId = NodeId.parse(nodeIdString)
-                val variant = when (rawValue) {
-                    is Boolean -> Variant(rawValue)
-                    is Int -> Variant(rawValue)
-                    is Short -> Variant(rawValue)
-                    else -> throw IllegalArgumentException("Unsupported type: ${rawValue.javaClass.simpleName}")
-                }
-
-                val dataValue = DataValue(variant, null, null)
-
-                val statusFuture = cli.writeValue(nodeId, dataValue)
-                val status = statusFuture.get(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS)
-
-                if (status.isGood) {
-                    // Reset connection lost on successful write
-                    isConnectionLost.set(false)
-                    lastSessionActiveTime = System.currentTimeMillis() // Update active time
-                    Log.d("OPCUAClient", "✅ Write successful: $nodeIdString = $rawValue")
-                } else {
-                    Log.e("OPCUAClient", "❌ Write failed: $nodeIdString, Status: $status")
-
-                    // Check for connection-related errors
-                    if (status.value == StatusCodes.Bad_NotConnected ||
-                        status.value == StatusCodes.Bad_ConnectionClosed ||
-                        status.value == StatusCodes.Bad_SessionClosed) {
-                        handleConnectionLost("Write failed with connection error: $status")
+            try {
+                withTimeout(OPERATION_TIMEOUT) {
+                    val nodeId = NodeId.parse(nodeIdString)
+                    val variant = when (rawValue) {
+                        is Boolean -> Variant(rawValue)
+                        is Int -> Variant(rawValue)
+                        is Short -> Variant(rawValue)
+                        else -> throw IllegalArgumentException(
+                            "Unsupported type: ${rawValue.javaClass.simpleName}"
+                        )
                     }
-                }
-                status
-            }
-        } catch (e: Exception) {
-            Log.e("OPCUAClient", "❌ Write error", e)
 
-            // Check if it's a connection error
-            if (e.message?.contains("Bad_", ignoreCase = true) == true ||
-                e.message?.contains("timeout", ignoreCase = true) == true ||
-                e.message?.contains("connection", ignoreCase = true) == true) {
-                handleConnectionLost("Write failed: ${e.message}")
+                    val dataValue = DataValue(variant, null, null)
+
+                    val statusFuture = cli.writeValue(nodeId, dataValue)
+                    val status = statusFuture.get(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS)
+
+                    if (status.isGood) {
+                        isConnectionLost.set(false)
+                        lastSessionActiveTime = System.currentTimeMillis()
+                        Log.d(TAG, "✅ Write successful: $nodeIdString = $rawValue")
+                    } else {
+                        Log.e(TAG, "❌ Write failed: $nodeIdString, Status: $status")
+
+                        if (status.value == StatusCodes.Bad_NotConnected ||
+                            status.value == StatusCodes.Bad_ConnectionClosed ||
+                            status.value == StatusCodes.Bad_SessionClosed) {
+                            handleConnectionLost("Write failed with connection error: $status")
+                        }
+                    }
+                    status
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Write error", e)
+
+                if (e.message?.contains("Bad_", ignoreCase = true) == true ||
+                    e.message?.contains("timeout", ignoreCase = true) == true ||
+                    e.message?.contains("connection", ignoreCase = true) == true) {
+                    handleConnectionLost("Write failed: ${e.message}")
+                }
+                null
             }
-            null
         }
-    }
 
     /**
-     * Read access level của node
+     * Thread-safe read access level
      */
     suspend fun readAccessLevel(nodeIdString: String): UByte? = withContext(Dispatchers.IO) {
-        val cli = client ?: return@withContext null
+        val cli = _client ?: return@withContext null
 
         try {
             withTimeout(OPERATION_TIMEOUT) {
                 val nodeId = NodeId.parse(nodeIdString)
-                val readValueId = ReadValueId(nodeId, AttributeId.AccessLevel.uid(), null, null)
-                val responseFuture = cli.read(0.0, TimestampsToReturn.Neither, listOf(readValueId))
+                val readValueId = ReadValueId(
+                    nodeId,
+                    AttributeId.AccessLevel.uid(),
+                    null,
+                    null
+                )
+                val responseFuture = cli.read(
+                    0.0,
+                    TimestampsToReturn.Neither,
+                    listOf(readValueId)
+                )
                 val response = responseFuture.get(OPERATION_TIMEOUT, TimeUnit.MILLISECONDS)
                 val dataValue = response.results?.firstOrNull()
                 dataValue?.value?.value as? UByte
             }
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "Failed to read AccessLevel for $nodeIdString", e)
+            Log.e(TAG, "Failed to read AccessLevel for $nodeIdString", e)
             null
+        }
+    }
+
+    /**
+     * Handle connection lost
+     */
+    private fun handleConnectionLost(reason: String) {
+        if (!isConnectionLost.getAndSet(true)) {
+            Log.e(TAG, "🔌 CONNECTION LOST: $reason")
+            connectionLostCallback?.invoke()
         }
     }
 
@@ -564,56 +542,65 @@ object OPCUAClientManager {
             return false
         }
 
-        return try {
-            client != null
-        } catch (e: Exception) {
-            false
-        }
+        return _client != null
     }
 
     /**
-     * Disconnect với cleanup
+     * Thread-safe disconnect
      */
-    suspend fun disconnect() = withContext(Dispatchers.IO) {
+    suspend fun disconnect() = clientMutex.withLock {
         try {
-            Log.d("OPCUAClient", "🔌 Disconnecting...")
+            Log.d(TAG, "🔌 Disconnecting...")
 
-            // Stop monitor
+            // Stop monitoring first
+            isMonitoringActive.set(false)
             connectionMonitorJob?.cancel()
+            connectionMonitorJob = null
 
             // Clean subscription
-            subscription?.let { sub ->
-                try {
-                    withTimeout(2000L) {
-                        val deleteFuture = sub.deleteMonitoredItems(sub.monitoredItems)
-                        deleteFuture.get(2000, TimeUnit.MILLISECONDS)
+            subscriptionMutex.withLock {
+                subscription?.let { sub ->
+                    try {
+                        withTimeoutOrNull(2000L) {
+                            val deleteFuture = sub.deleteMonitoredItems(sub.monitoredItems)
+                            deleteFuture.get(2000, TimeUnit.MILLISECONDS)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error deleting monitored items", e)
                     }
-                } catch (e: Exception) {
-                    Log.w("OPCUAClient", "Error deleting monitored items", e)
                 }
+                subscription = null
             }
-            subscription = null
+
+            // Remove listeners
+            _client?.let { cli ->
+                sessionListener?.let { cli.removeSessionActivityListener(it) }
+                subscriptionListener?.let { cli.subscriptionManager.removeSubscriptionListener(it) }
+            }
 
             // Disconnect client
-            client?.let { cli ->
+            _client?.let { cli ->
                 try {
-                    withTimeout(2000L) {
-                        val disconnectFuture = cli.disconnect()
-                        disconnectFuture.get(2000, TimeUnit.MILLISECONDS)
+                    withTimeoutOrNull(2000L) {
+                        cli.disconnect().get(2000, TimeUnit.MILLISECONDS)
                     }
                 } catch (e: Exception) {
-                    Log.w("OPCUAClient", "Error during disconnect", e)
+                    Log.w(TAG, "Error during disconnect", e)
                 }
             }
 
-            client = null
+            // Clear state
+            _client = null
             isConnectionLost.set(false)
             connectionLostCallback = null
+            connectionRestoredCallback = null
             lastDataReceived.clear()
+            sessionListener = null
+            subscriptionListener = null
 
-            Log.d("OPCUAClient", "✅ Disconnected")
+            Log.d(TAG, "✅ Disconnected")
         } catch (e: Exception) {
-            Log.e("OPCUAClient", "❌ Error during disconnect", e)
+            Log.e(TAG, "❌ Error during disconnect", e)
         }
     }
 
@@ -621,8 +608,16 @@ object OPCUAClientManager {
      * Force cleanup on app exit
      */
     fun cleanup() {
+        isMonitoringActive.set(false)
         connectionMonitorJob?.cancel()
         monitorScope.cancel()
-//        stopSound() // if any
+
+        runBlocking {
+            try {
+                disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during cleanup", e)
+            }
+        }
     }
 }

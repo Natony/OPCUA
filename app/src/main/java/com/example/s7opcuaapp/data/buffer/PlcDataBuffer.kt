@@ -14,6 +14,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 
 /**
  * Smart buffer system to batch PLC data updates and reduce UI update frequency
+ * FIXED: No more blocking main thread
  */
 @Singleton
 class PlcDataBuffer @Inject constructor(
@@ -32,9 +33,9 @@ class PlcDataBuffer @Inject constructor(
     private val lastEmitTime = AtomicLong(0)
     private val pendingEmit = AtomicBoolean(false)
 
-    // Configuration - INCREASED VALUES
-    private val MIN_EMIT_INTERVAL = 1000L // Increased from 500ms to 1000ms
-    private val BATCH_DELAY = 250L // Increased from 100ms to 250ms
+    // Configuration
+    private val MIN_EMIT_INTERVAL = 1000L
+    private val BATCH_DELAY = 250L
 
     // Output flow
     private val _dataFlow = MutableSharedFlow<PlcData>(
@@ -45,14 +46,15 @@ class PlcDataBuffer @Inject constructor(
 
     // Coroutine scope for buffer operations
     private val bufferScope = CoroutineScope(
-        Dispatchers.Default + SupervisorJob()
+        Dispatchers.Default + SupervisorJob() +
+                CoroutineName("PlcDataBuffer")
     )
 
     private var emitJob: Job? = null
 
     // Priority tracking for critical values
     private val criticalBoolIndices = setOf(4, 10) // Power, E-Stop
-    private val criticalIntIndices = setOf<Int>() // Add critical int indices if needed
+    private val criticalIntIndices = setOf<Int>()
 
     // Track last emitted data to avoid redundant updates
     private var lastEmittedData: PlcData? = null
@@ -63,7 +65,6 @@ class PlcDataBuffer @Inject constructor(
         // Initialize with default values
         repeat(15) { boolBuffer[it] = false }
         repeat(28) { intBuffer[it] = 0 }
-
         Log.d("PlcDataBuffer", "Buffer initialized with default values")
     }
 
@@ -130,7 +131,6 @@ class PlcDataBuffer @Inject constructor(
                 val timeSinceLastEmit = now - lastEmitTime.get()
 
                 if (timeSinceLastEmit < MIN_EMIT_INTERVAL) {
-                    // Wait until minimum interval has passed
                     delay(MIN_EMIT_INTERVAL - timeSinceLastEmit)
                 }
 
@@ -175,9 +175,9 @@ class PlcDataBuffer @Inject constructor(
             // Track update rate for debugging
             updateCount++
             val now = System.currentTimeMillis()
-            if (now - lastLogTime >= 5000) { // Log every 5 seconds
+            if (now - lastLogTime >= 5000) {
                 val rate = updateCount * 1000.0 / (now - lastLogTime)
-                Log.d("PlcDataBuffer", "Update rate: ${String.format("%.1f", rate)}/s, Total changes: ${boolChanged.size + intChanged.size}")
+                Log.d("PlcDataBuffer", "Update rate: ${String.format("%.1f", rate)}/s")
                 updateCount = 0
                 lastLogTime = now
             }
@@ -185,7 +185,6 @@ class PlcDataBuffer @Inject constructor(
             // Emit data
             _dataFlow.emit(newData)
         } else {
-            // Data hasn't changed, just reset pending flag
             pendingEmit.set(false)
             boolChanged.clear()
             intChanged.clear()
@@ -205,11 +204,7 @@ class PlcDataBuffer @Inject constructor(
     fun getCurrentData(): PlcData {
         val boolList = (0 until 15).map { boolBuffer[it] ?: false }
         val intList = (0 until 28).map { intBuffer[it] ?: 0 }
-
-        return PlcData(
-            bools = boolList,
-            ints = intList
-        )
+        return PlcData(bools = boolList, ints = intList)
     }
 
     /**
@@ -217,7 +212,6 @@ class PlcDataBuffer @Inject constructor(
      */
     fun forceEmit() {
         bufferScope.launch {
-            // Reset last emitted data to force emit
             lastEmittedData = null
             emitData()
         }
@@ -247,15 +241,20 @@ class PlcDataBuffer @Inject constructor(
     }
 
     /**
-     * Clean up resources
+     * FIXED: Clean up resources WITHOUT blocking
      */
-    fun dispose() {
-        runBlocking {
-            emitJob?.cancel()
-            emitJob?.join() // Wait for completion
+    suspend fun dispose() {
+        Log.d("PlcDataBuffer", "Disposing buffer...")
 
-            bufferScope.coroutineContext.cancelChildren()
-            bufferScope.coroutineContext[Job]?.join() // Wait for all children
+        // Cancel emit job first
+        emitJob?.cancel()
+
+        // Cancel scope children and wait in coroutine context
+        bufferScope.coroutineContext.cancelChildren()
+
+        // Wait for all jobs to complete (non-blocking)
+        bufferScope.coroutineContext[Job]?.children?.forEach { job ->
+            job.join()
         }
 
         // Clear data after coroutines complete
@@ -265,6 +264,23 @@ class PlcDataBuffer @Inject constructor(
         intChanged.clear()
 
         Log.d("PlcDataBuffer", "Buffer disposed completely")
+    }
+
+    /**
+     * Alternative synchronous cleanup for when suspend is not available
+     */
+    fun cleanup() {
+        // Cancel all jobs immediately
+        emitJob?.cancel()
+        bufferScope.cancel()
+
+        // Clear data
+        boolBuffer.clear()
+        intBuffer.clear()
+        boolChanged.clear()
+        intChanged.clear()
+
+        Log.d("PlcDataBuffer", "Buffer cleaned up")
     }
 
     /**

@@ -10,9 +10,11 @@ import com.example.s7opcuaapp.data.repository.OptimizedOPCUARepositoryImpl
 import com.example.s7opcuaapp.data.repository.S7Repository
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import com.example.s7opcuaapp.util.ButtonLockConfig
+import com.example.s7opcuaapp.util.ButtonOperationManager
 import com.example.s7opcuaapp.util.ConnectionManager
 import com.example.s7opcuaapp.util.ConnectionTimeoutManager
 import com.example.s7opcuaapp.util.PerformanceMonitor
+import com.example.s7opcuaapp.util.PlcDataManager
 import com.example.s7opcuaapp.util.StatusLockConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
@@ -34,11 +36,16 @@ class ControlViewModel @Inject constructor(
     private val buttonLockConfig: ButtonLockConfig,
     private val statusLockConfig: StatusLockConfig,
     private val connectionTimeoutManager: ConnectionTimeoutManager,
-    private val connectionManager: ConnectionManager
+    private val connectionManager: ConnectionManager,
+    private val buttonManager: ButtonOperationManager,
+    private val dataManager: PlcDataManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ControlUiState())
     val uiState: StateFlow<ControlUiState> = _uiState.asStateFlow()
+
+    // Delegate to managers
+    val uiState = dataManager.uiState
 
     private val repoImpl = repository as OptimizedOPCUARepositoryImpl
     private val functionCodeNodeIndex = 14
