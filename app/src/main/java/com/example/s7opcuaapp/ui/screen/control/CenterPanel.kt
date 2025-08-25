@@ -15,6 +15,12 @@ import com.example.s7opcuaapp.ui.components.*
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.style.TextAlign
+import com.example.s7opcuaapp.ui.components.unified.ComponentFactory
+import com.example.s7opcuaapp.ui.components.unified.StatusDisplayConfig
+import com.example.s7opcuaapp.ui.components.unified.StatusDisplayType
+import com.example.s7opcuaapp.ui.components.unified.UnifiedButton
+import com.example.s7opcuaapp.ui.components.unified.UnifiedStatusDisplay
+import com.example.s7opcuaapp.ui.theme.UiConfig
 
 @Composable
 fun CenterPanel(
@@ -27,126 +33,191 @@ fun CenterPanel(
     modifier: Modifier = Modifier
 ) {
     val data = uiState.plcData
-    val isWriting = uiState.isWriting
-
     val SEND_ALL_BUTTON_INDEX = 999
     val isSendAllLocked = SEND_ALL_BUTTON_INDEX in uiState.lockedButtons
 
     Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .padding(1.dp),
+        modifier = modifier.fillMaxHeight().padding(1.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Positions row
+        // Positions row - using unified MULTI_STATE status displays
         Row(
             modifier = Modifier.weight(0.25f),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            MultiStateStatusItem(
-                "Pos1", data.ints.getOrNull(15) ?: 0, listOf(
-                    R.drawable.ic_pos1_state0,
-                    R.drawable.ic_pos1_state1,
-                    R.drawable.ic_pos1_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos2", data.ints.getOrNull(16) ?: 0, listOf(
-                    R.drawable.ic_pos2_state0,
-                    R.drawable.ic_pos2_state1,
-                    R.drawable.ic_pos2_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos3", data.ints.getOrNull(17) ?: 0, listOf(
-                    R.drawable.ic_pos3_state0,
-                    R.drawable.ic_pos3_state1,
-                    R.drawable.ic_pos3_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos4", data.ints.getOrNull(18) ?: 0, listOf(
-                    R.drawable.ic_pos4_state0,
-                    R.drawable.ic_pos4_state1,
-                    R.drawable.ic_pos4_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos5", data.ints.getOrNull(19) ?: 0, listOf(
-                    R.drawable.ic_pos5_state0,
-                    R.drawable.ic_pos5_state1,
-                    R.drawable.ic_pos5_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos6", data.ints.getOrNull(20) ?: 0, listOf(
-                    R.drawable.ic_pos6_state0,
-                    R.drawable.ic_pos6_state1,
-                    R.drawable.ic_pos6_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos7", data.ints.getOrNull(21) ?: 0, listOf(
-                    R.drawable.ic_pos7_state0,
-                    R.drawable.ic_pos7_state1,
-                    R.drawable.ic_pos7_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos8", data.ints.getOrNull(22) ?: 0, listOf(
-                    R.drawable.ic_pos8_state0,
-                    R.drawable.ic_pos8_state1,
-                    R.drawable.ic_pos8_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos9", data.ints.getOrNull(23) ?: 0, listOf(
-                    R.drawable.ic_pos9_state0,
-                    R.drawable.ic_pos9_state1,
-                    R.drawable.ic_pos9_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos10", data.ints.getOrNull(24) ?: 0, listOf(
-                    R.drawable.ic_pos10_state0,
-                    R.drawable.ic_pos10_state1,
-                    R.drawable.ic_pos10_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos11", data.ints.getOrNull(25) ?: 0, listOf(
-                    R.drawable.ic_pos11_state0,
-                    R.drawable.ic_pos11_state1,
-                    R.drawable.ic_pos11_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos12", data.ints.getOrNull(26) ?: 0, listOf(
-                    R.drawable.ic_pos12_state0,
-                    R.drawable.ic_pos12_state1,
-                    R.drawable.ic_pos12_state2
-                ), modifier = Modifier.size(36.dp)
-            )
-            MultiStateStatusItem(
-                "Pos13", data.ints.getOrNull(27) ?: 0, listOf(
-                    R.drawable.ic_pos13_state0,
-                    R.drawable.ic_pos13_state1,
-                    R.drawable.ic_pos13_state2
-                ), modifier = Modifier.size(36.dp)
-            )
+            // Positions row - Each position has its own unique icons
+            Row(
+                modifier = Modifier.weight(0.25f),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Position 1
+                MultiStateStatusItem(
+                    label = "Pos1",
+                    intValue = data.ints.getOrNull(15) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos1_state0,
+                        R.drawable.ic_pos1_state1,
+                        R.drawable.ic_pos1_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 2
+                MultiStateStatusItem(
+                    label = "Pos2",
+                    intValue = data.ints.getOrNull(16) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos2_state0,
+                        R.drawable.ic_pos2_state1,
+                        R.drawable.ic_pos2_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 3
+                MultiStateStatusItem(
+                    label = "Pos3",
+                    intValue = data.ints.getOrNull(17) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos3_state0,
+                        R.drawable.ic_pos3_state1,
+                        R.drawable.ic_pos3_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 4
+                MultiStateStatusItem(
+                    label = "Pos4",
+                    intValue = data.ints.getOrNull(18) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos4_state0,
+                        R.drawable.ic_pos4_state1,
+                        R.drawable.ic_pos4_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 5
+                MultiStateStatusItem(
+                    label = "Pos5",
+                    intValue = data.ints.getOrNull(19) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos5_state0,
+                        R.drawable.ic_pos5_state1,
+                        R.drawable.ic_pos5_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 6
+                MultiStateStatusItem(
+                    label = "Pos6",
+                    intValue = data.ints.getOrNull(20) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos6_state0,
+                        R.drawable.ic_pos6_state1,
+                        R.drawable.ic_pos6_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 7
+                MultiStateStatusItem(
+                    label = "Pos7",
+                    intValue = data.ints.getOrNull(21) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos7_state0,
+                        R.drawable.ic_pos7_state1,
+                        R.drawable.ic_pos7_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 8
+                MultiStateStatusItem(
+                    label = "Pos8",
+                    intValue = data.ints.getOrNull(22) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos8_state0,
+                        R.drawable.ic_pos8_state1,
+                        R.drawable.ic_pos8_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 9
+                MultiStateStatusItem(
+                    label = "Pos9",
+                    intValue = data.ints.getOrNull(23) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos9_state0,
+                        R.drawable.ic_pos9_state1,
+                        R.drawable.ic_pos9_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 10
+                MultiStateStatusItem(
+                    label = "Pos10",
+                    intValue = data.ints.getOrNull(24) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos10_state0,
+                        R.drawable.ic_pos10_state1,
+                        R.drawable.ic_pos10_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 11
+                MultiStateStatusItem(
+                    label = "Pos11",
+                    intValue = data.ints.getOrNull(25) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos11_state0,
+                        R.drawable.ic_pos11_state1,
+                        R.drawable.ic_pos11_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 12
+                MultiStateStatusItem(
+                    label = "Pos12",
+                    intValue = data.ints.getOrNull(26) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos12_state0,
+                        R.drawable.ic_pos12_state1,
+                        R.drawable.ic_pos12_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+
+                // Position 13
+                MultiStateStatusItem(
+                    label = "Pos13",
+                    intValue = data.ints.getOrNull(27) ?: 0,
+                    icons = listOf(
+                        R.drawable.ic_pos13_state0,
+                        R.drawable.ic_pos13_state1,
+                        R.drawable.ic_pos13_state2
+                    ),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         // Start/End/Actual/Function/Send row
         Row(
-            modifier = Modifier
-                .weight(0.5f)
-                .fillMaxWidth(),
+            modifier = Modifier.weight(0.5f).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Start point cluster
+            // Start point cluster - using unified NUMERIC status
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
@@ -157,130 +228,34 @@ fun CenterPanel(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    InlineNumberInputItem(
-//                        label = "X",
-                        textValue = uiState.intInputs[5] ?: (data.ints.getOrNull(5)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(5, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    InlineNumberInputItem(
-//                        label = "Y",
-                        textValue = uiState.intInputs[6] ?: (data.ints.getOrNull(6)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(6, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    InlineNumberInputItem(
-//                        label = "Z",
-                        textValue = uiState.intInputs[7] ?: (data.ints.getOrNull(7)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(7, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-            // End point cluster
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Điểm kết thúc", style = MaterialTheme.typography.bodySmall)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    InlineNumberInputItem(
-//                        label = "X",
-                        textValue = uiState.intInputs[8] ?: (data.ints.getOrNull(8)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(8, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    InlineNumberInputItem(
-//                        label = "Y",
-                        textValue = uiState.intInputs[9] ?: (data.ints.getOrNull(9)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(9, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    InlineNumberInputItem(
-//                        label = "Z",
-                        textValue = uiState.intInputs[10] ?: (data.ints.getOrNull(10)
-                            ?.toString() ?: "0"),
-                        isWriting = isWriting,
-                        onTextChange = { onTextChange(10, it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-            // Actual point cluster
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Thực tế", style = MaterialTheme.typography.bodySmall)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    NumericStatusItem(
-//                        label = "X",
-                        value = data.ints.getOrNull(11) ?: 0,
-                        modifier = Modifier.weight(1f)
-                    )
-                    NumericStatusItem(
-//                        label = "Y",
-                        value = data.ints.getOrNull(12) ?: 0,
-                        modifier = Modifier.weight(1f)
-                    )
-                    NumericStatusItem(
-//                        label = "Z",
-                        value = data.ints.getOrNull(13) ?: 0,
-                        modifier = Modifier.weight(1f)
-                    )
+                    repeat(3) { index ->
+                        val fieldIndex = 5 + index  // X=5, Y=6, Z=7
+                        UnifiedStatusDisplay(
+                            config = StatusDisplayConfig(
+                                type = StatusDisplayType.INLINE_NUMBER,
+                                value = uiState.intInputs[fieldIndex]
+                                    ?: (data.ints.getOrNull(fieldIndex)?.toString() ?: "0")
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
+            // Send All button - using unified ACTION button
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Function selector dropdown placeholder
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    FunctionListSelector(
-                        entries = listOf(
-                            "Function 1" to 1,
-                            "Function 2" to 2,
-                            "Function 3" to 3
-                        ),
-                        selectedCode = uiState.selectedFunction,
-                        onSelect = onFunctionSelect,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                SendAllButton(
-                    isAutoMode = isAuto,
-                    isWriting = isWriting,
-                    isLocked = isSendAllLocked,
-                    onClick = onSendAll,
+                UnifiedButton(
+                    config = ComponentFactory.actionButton(
+                        label = "CHẠY",
+                        onClick = onSendAll,
+                        isAutoMode = isAuto,
+                        isProcessing = uiState.isWriting,
+                        isLocked = isSendAllLocked
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

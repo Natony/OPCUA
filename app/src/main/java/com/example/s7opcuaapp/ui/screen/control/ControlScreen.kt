@@ -13,6 +13,10 @@ import androidx.compose.ui.unit.dp
 import android.util.Log
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.ui.components.*
+import com.example.s7opcuaapp.ui.components.unified.ComponentFactory
+import com.example.s7opcuaapp.ui.components.unified.OverlayConfig
+import com.example.s7opcuaapp.ui.components.unified.OverlayType
+import com.example.s7opcuaapp.ui.components.unified.UnifiedOverlay
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -113,26 +117,35 @@ fun ControlScreen(
         // Connection state overlays
         when (connectionState) {
             is ControlViewModel.ConnectionState.Offline -> {
-                OfflineOverlay(
-                    onRetryConnection = onRetryConnection,
-                    onExitOffline = onNavigateToConfig
+                UnifiedOverlay(
+                    config = ComponentFactory.offlineOverlay(
+                        onRetry = onRetryConnection,
+                        onSettings = onNavigateToConfig
+                    )
                 )
             }
 
             is ControlViewModel.ConnectionState.Connecting -> {
                 if (uiState.loadingPercent in 1..99) {
-                    LoadingOverlay(
-                        message = "Connecting to PLC... (Attempt ${connectionState.attempt}/3)",
-                        loadingPercent = uiState.loadingPercent,
-                        isIndeterminate = false
+                    UnifiedOverlay(
+                        config = ComponentFactory.loadingOverlay(
+                            message = "Connecting to PLC... (Attempt ${connectionState.attempt}/3)",
+                            progressValue = uiState.loadingPercent
+                        )
                     )
                 }
             }
 
             is ControlViewModel.ConnectionState.Failed -> {
                 if (connectionState.error.contains("Connection lost", ignoreCase = true)) {
-                    ConnectionLostNotification(onRetryConnection = onRetryConnection)
-                }
+                    UnifiedOverlay(
+                        config = OverlayConfig(
+                            type = OverlayType.CONNECTION_LOST,
+                            message = "Connection lost - Reconnecting...",
+                            showRetry = true,
+                            onRetry = onRetryConnection
+                        )
+                    )                }
             }
 
             else -> { /* No overlay */ }
