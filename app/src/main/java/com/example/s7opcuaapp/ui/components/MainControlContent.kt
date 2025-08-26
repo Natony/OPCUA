@@ -9,11 +9,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.BuildConfig
-import com.example.s7opcuaapp.ui.screen.control.BottomControlsRow
-import com.example.s7opcuaapp.ui.screen.control.CenterPanel
-import com.example.s7opcuaapp.ui.screen.control.ControlUiState
-import com.example.s7opcuaapp.ui.screen.control.LeftControlPanel
-import com.example.s7opcuaapp.ui.screen.control.RightControlPanel
+import com.example.s7opcuaapp.ui.screen.control.*
+import com.example.s7opcuaapp.ui.components.unified.*
 
 @Composable
 internal fun MainControlContent(
@@ -31,23 +28,20 @@ internal fun MainControlContent(
     onReleaseButton: (Int) -> Boolean,
     onRetryConnection: () -> Unit
 ) {
-    SingleTouchHandler(modifier = Modifier.fillMaxSize()) {
-        // Dialog
-        uiState.openDialogForIndex?.let { idx ->
-            NumberInputDialog(
-                title = uiState.dialogTitle.ifBlank { "Nhập giá trị" },
-                initialValue = uiState.plcData.ints.getOrNull(idx)?.toString() ?: "0",
-                onConfirm = { value -> onConfirmNumber(idx, value) },
-                onDismiss = onDismissDialog
-            )
-        }
-
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Connection lost notification at top
+            // Connection lost notification at top using UnifiedOverlay
             if (uiState.errorMessage?.contains("Connection lost", ignoreCase = true) == true ||
                 uiState.errorMessage?.contains("Reconnecting", ignoreCase = true) == true
             ) {
-                ConnectionLostNotification(onRetryConnection = onRetryConnection)
+                UnifiedOverlay(
+                    config = OverlayConfig(
+                        type = OverlayType.CONNECTION_LOST,
+                        message = "Connection lost - Reconnecting...",
+                        showRetry = true,
+                        onRetry = onRetryConnection
+                    )
+                )
             }
 
             // Main control panels
@@ -95,16 +89,23 @@ internal fun MainControlContent(
                 )
             }
         }
-        // Connection lost notification
-        if (uiState.errorMessage?.contains("Connection lost") == true) {
-            ConnectionLostNotification(onRetryConnection = onRetryConnection)
+
+        // Dialog
+        uiState.openDialogForIndex?.let { idx ->
+            NumberInputDialog(
+                title = uiState.dialogTitle.ifBlank { "Nhập giá trị" },
+                initialValue = uiState.plcData.ints.getOrNull(idx)?.toString() ?: "0",
+                onConfirm = { value -> onConfirmNumber(idx, value) },
+                onDismiss = onDismissDialog
+            )
         }
 
-        // Performance overlay in debug
-//        val isInPreview = LocalInspectionMode.current
-//        if (BuildConfig.DEBUG && !isInPreview) {
-//            PerformanceOverlay(modifier = Modifier.padding(16.dp))
-//        }
+        // Performance overlay in debug (optional)
+        val isInPreview = LocalInspectionMode.current
+        if (BuildConfig.DEBUG && !isInPreview) {
+            // Uncomment if you want performance overlay
+            // PerformanceOverlay(modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
 }
 
@@ -142,7 +143,7 @@ private fun CenterSection(
                 onFunctionSelect = onFunctionSelect,
                 onTextChange = onTextChange,
                 onSendAll = onSendAll,
-                modifier = Modifier.weight(0.3f)
+                modifier = Modifier.fillMaxSize()
             )
         }
 
@@ -158,7 +159,7 @@ private fun CenterSection(
                 data = uiState.plcData,
                 onToggleBoolean = onToggleBoolean,
                 onToggleAutoMode = onToggleAutoMode,
-                modifier = Modifier.weight(0.7f),
+                modifier = Modifier.fillMaxSize(),
                 lockedButtons = uiState.lockedButtons,
                 busyButtons = uiState.busyButtons,
                 isProcessing = uiState.isProcessing
