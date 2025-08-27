@@ -10,9 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.R
-import com.example.s7opcuaapp.ui.components.BoolControlItem
-import com.example.s7opcuaapp.ui.components.IntControlItem
-import com.example.s7opcuaapp.ui.components.PressReleaseBoolControlItem
+import com.example.s7opcuaapp.ui.components.unified.ButtonConfig
+import com.example.s7opcuaapp.ui.components.unified.ButtonType
+import com.example.s7opcuaapp.ui.components.unified.ComponentFactory
+import com.example.s7opcuaapp.ui.components.unified.UnifiedButton
 
 @Composable
 fun RightControlPanel(
@@ -43,41 +44,49 @@ fun RightControlPanel(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                IntControlItem(
-                    intValue = data.ints.getOrNull(3) ?: 0,
-                    icons = listOf(
-                        R.drawable.ic_pallets_plus_off,
-                        R.drawable.ic_pallets_plus_on
-                    ),
-                    onClick = { onOpenDialog("Nhập số lượng đưa pallet vào",3) },
-                    enabled = (3 + 200) !in lockedButtons,
-                    isProcessing = (3 + 200) in busyButtons
+                UnifiedButton(
+                    config = ButtonConfig(
+                        type = ButtonType.INT_CONTROL,
+                        value = data.ints.getOrNull(3) ?: 0,
+                        icons = listOf(
+                            R.drawable.ic_pallets_plus_off,
+                            R.drawable.ic_pallets_plus_on
+                        ),
+                        onValueClick = { onOpenDialog("Nhập số lượng đưa pallet vào", 3) },
+                        enabled = (3 + 200) !in lockedButtons,
+                        isProcessing = (3 + 200) in busyButtons
+                    )
+                )
+
+            }
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                UnifiedButton(
+                    config = ComponentFactory.toggleButton(
+                        value = data.bools.getOrNull(7) ?: false,
+                        iconOn = R.drawable.ic_pallet_plus_on,
+                        iconOff = R.drawable.ic_pallet_plus_off,
+                        onClick = { onToggleBoolean(7, data.bools.getOrNull(7)?.not() ?: false) },
+                        enabled = 7 !in lockedButtons,
+                        isProcessing = 7 in busyButtons
+                    )
                 )
             }
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                BoolControlItem(
-                    value = data.bools.getOrNull(7) ?: false,
-                    iconOn = R.drawable.ic_pallet_plus_on,
-                    iconOff = R.drawable.ic_pallet_plus_off,
-                    onClick = { onToggleBoolean(7, data.bools.getOrNull(7)?.not() ?: false) },
-                    enabled = 7 !in lockedButtons,
-                    isProcessing = 7 in busyButtons
-                )
-            }
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                BoolControlItem(
-                    value = data.bools.getOrNull(9) ?: false,
-                    iconOn = R.drawable.ic_stack_pallets_b_on,
-                    iconOff = R.drawable.ic_stack_pallets_b_off,
-                    onClick = { onToggleBoolean(9, data.bools.getOrNull(9)?.not() ?: false) },
-                    enabled = 9 !in lockedButtons,
-                    isProcessing = 9 in busyButtons
+                UnifiedButton(
+                    config = ComponentFactory.toggleButton(
+                        value = data.bools.getOrNull(9) ?: false,
+                        iconOn = R.drawable.ic_stack_pallets_b_on,
+                        iconOff = R.drawable.ic_stack_pallets_b_off,
+                        onClick = { onToggleBoolean(9, data.bools.getOrNull(9)?.not() ?: false) },
+                        enabled = 9 !in lockedButtons,
+                        isProcessing = 9 in busyButtons
+                    )
                 )
             }
         } else {
@@ -86,26 +95,30 @@ fun RightControlPanel(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                PressReleaseBoolControlItem(
-                    value = data.bools.getOrNull(2) ?: false,
-                    iconOn = R.drawable.ic_shuttle_up_on,
-                    iconOff = R.drawable.ic_shuttle_up_off,
-                    onPress = { onPressButton(2) },
-                    onRelease = { onReleaseButton(2) },
-                    enabled = 2 !in lockedButtons
+                UnifiedButton(
+                        config = ComponentFactory.pressReleaseButton(
+                        value = data.bools.getOrNull(2) ?: false,
+                        iconOn = R.drawable.ic_shuttle_up_on,
+                        iconOff = R.drawable.ic_shuttle_up_off,
+                        onPress = { onPressButton(2) },
+                        onRelease = { onReleaseButton(2) },
+                        enabled = 2 !in lockedButtons
+                    )
                 )
             }
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                PressReleaseBoolControlItem(
-                    value = data.bools.getOrNull(3) ?: false,
-                    iconOn = R.drawable.ic_shuttle_down_on,
-                    iconOff = R.drawable.ic_shuttle_down_off,
-                    onPress = { onPressButton(3) },
-                    onRelease = { onReleaseButton(3) },
-                    enabled = 3 !in lockedButtons
+                UnifiedButton(
+                    config = ComponentFactory.pressReleaseButton(
+                        value = data.bools.getOrNull(3) ?: false,
+                        iconOn = R.drawable.ic_shuttle_down_on,
+                        iconOff = R.drawable.ic_shuttle_down_off,
+                        onPress = { onPressButton(3) },
+                        onRelease = { onReleaseButton(3) },
+                        enabled = 3 !in lockedButtons
+                    )
                 )
             }
         }

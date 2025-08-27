@@ -10,9 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.R
-import com.example.s7opcuaapp.ui.components.BoolControlItem
-import com.example.s7opcuaapp.ui.components.IntControlItem
-import com.example.s7opcuaapp.ui.components.PressReleaseBoolControlItem
 import com.example.s7opcuaapp.ui.components.unified.ButtonConfig
 import com.example.s7opcuaapp.ui.components.unified.ButtonType
 import com.example.s7opcuaapp.ui.components.unified.ComponentFactory
@@ -69,6 +66,23 @@ fun LeftControlPanel(
                         onClick = { onToggleBoolean(6, data.bools.getOrNull(6)?.not() ?: false) },
                         enabled = 6 !in lockedButtons,
                         isProcessing = 6 in busyButtons
+                    )
+                )
+            }
+
+            // Auto mode - using unified TOGGLE button
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                UnifiedButton(
+                    config = ComponentFactory.toggleButton(
+                        value = data.bools.getOrNull(8) ?: false,
+                        iconOn = R.drawable.ic_stack_pallets_b_on,
+                        iconOff = R.drawable.ic_stack_pallets_b_off,
+                        onClick = { onToggleBoolean(8, data.bools.getOrNull(8)?.not() ?: false) },
+                        enabled = 8 !in lockedButtons,
+                        isProcessing = 8 in busyButtons
                     )
                 )
             }

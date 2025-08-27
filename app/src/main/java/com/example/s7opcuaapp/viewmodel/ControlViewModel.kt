@@ -117,7 +117,7 @@ class ControlViewModel @Inject constructor(
     /**
      * Start connection to PLC
      */
-    fun startConnection() {
+    internal fun startConnection() {
         if (isOfflineMode) {
             Log.d(TAG, "In offline mode, skipping connection")
             return
@@ -133,20 +133,47 @@ class ControlViewModel @Inject constructor(
                 dataManager.updateLoadingPercent(0)
                 dataManager.clearError()
 
-                // Monitor loading progress
-                monitorLoadingProgress()
+                // Add proper exception handling for loading monitor
+                val loadingJob = launch {
+                    try {
+                        repoImpl.observeLoadingPercent()
+                            .catch { error ->
+                                // Handle loading errors gracefully
+                                Log.e(TAG, "Loading monitor error", error)
+                                dataManager.updateLoadingPercent(-1)
+                            }
+                            .collect { percent ->
+                                Log.d(TAG, "Loading progress: $percent%")
+                                dataManager.updateLoadingPercent(percent)
 
-                // Start repository connection
+                                when (percent) {
+                                    100 -> Log.d(TAG, "Loading complete")
+                                    -1 -> {
+                                        // Don't throw exception, handle gracefully
+                                        Log.e(TAG, "Loading error detected")
+                                        handleConnectionError(Exception("Loading failed"))
+                                    }
+                                }
+                            }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Loading collection error", e)
+                        handleConnectionError(e)
+                    }
+                }
+
+                // Start repository connection with proper timeout
                 val connected = withTimeoutOrNull(30000L) {
                     repoImpl.start()
-                    delay(500) // Wait for connection to establish
+                    delay(500)
                     repoImpl.isConnected()
                 } ?: false
+
+                loadingJob.cancel() // Clean up loading job
 
                 if (connected) {
                     handleConnectionSuccess()
                 } else {
-                    throw Exception("Connection failed")
+                    throw Exception("Connection verification failed")
                 }
 
             } catch (e: TimeoutCancellationException) {

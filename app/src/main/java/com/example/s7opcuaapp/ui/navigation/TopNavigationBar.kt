@@ -23,7 +23,9 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.s7opcuaapp.R
-import com.example.s7opcuaapp.ui.components.BatteryStatusItem
+import com.example.s7opcuaapp.ui.components.unified.StatusDisplayConfig
+import com.example.s7opcuaapp.ui.components.unified.StatusDisplayType
+import com.example.s7opcuaapp.ui.components.unified.UnifiedStatusDisplay
 import com.example.s7opcuaapp.util.StatusLockConfig
 import com.example.s7opcuaapp.viewmodel.ControlViewModel
 
@@ -217,13 +219,16 @@ fun TopNavigationBar(
                 modifier = Modifier.weight(0.07f),
                 contentAlignment = Alignment.Center
             ) {
-                BatteryStatusItem(
-                    level = batteryLevel,
-                    thresholds = listOf(20, 80),
-                    icons = listOf(
-                        R.drawable.ic_battery_low,
-                        R.drawable.ic_battery_medium,
-                        R.drawable.ic_battery_full
+                UnifiedStatusDisplay(
+                    config = StatusDisplayConfig(
+                        type = StatusDisplayType.BATTERY,
+                        value = batteryLevel,
+                        icons = listOf(
+                            R.drawable.ic_battery_low,
+                            R.drawable.ic_battery_medium,
+                            R.drawable.ic_battery_full
+                        ),
+                        thresholds = listOf(20, 80)
                     ),
                     modifier = Modifier.size(28.dp)
                 )

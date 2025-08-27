@@ -107,42 +107,38 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         while (isStarted.get() && repositoryScope.isActive) {
             try {
                 when {
-                    // Case 1: Not connected - try to establish connection
                     !isConnected.get() -> {
-                        handleNotConnected(consecutiveFailures)?.let { failures ->
-                            consecutiveFailures = failures
-                        } ?: break // Max failures reached, exit loop
+                        val failures = handleNotConnected(consecutiveFailures)
+                        if (failures == null) {
+                            // Max failures reached, emit error state
+                            loadingTracker.setError()
+                            break
+                        }
+                        consecutiveFailures = failures
                     }
 
-                    // Case 2: Connected - perform health check
                     else -> {
                         val isHealthy = performHealthCheck()
                         if (!isHealthy) {
-                            Log.w(TAG, "Health check failed, marking as disconnected")
+                            Log.w(TAG, "Health check failed")
                             handleDisconnection()
-                            consecutiveFailures = 1 // Start counting failures again
+                            consecutiveFailures = 1
                         } else {
-                            consecutiveFailures = 0 // Reset on successful health check
+                            consecutiveFailures = 0
                         }
-
-                        // Wait before next health check
                         delay(HEALTH_CHECK_INTERVAL)
                     }
                 }
-
             } catch (e: CancellationException) {
-                // Normal cancellation - exit gracefully
                 Log.d(TAG, "Connection loop cancelled")
                 break
-
             } catch (e: Exception) {
-                // Unexpected error
-                Log.e(TAG, "Unexpected error in connection loop", e)
+                Log.e(TAG, "Connection loop error", e)
                 consecutiveFailures++
 
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    Log.e(TAG, "Max consecutive failures reached due to errors")
-                    handleMaxFailuresReached()
+                    Log.e(TAG, "Max failures reached")
+                    loadingTracker.setError()
                     break
                 }
 
@@ -150,9 +146,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
             }
         }
 
-        // Cleanup when loop exits
         Log.d(TAG, "Connection loop ended")
-        handleLoopExit()
     }
 
     /**

@@ -12,9 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.s7opcuaapp.R
 import com.example.s7opcuaapp.ui.components.*
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.text.style.TextAlign
+
 import com.example.s7opcuaapp.ui.components.unified.ComponentFactory
 import com.example.s7opcuaapp.ui.components.unified.StatusDisplayConfig
 import com.example.s7opcuaapp.ui.components.unified.StatusDisplayType
