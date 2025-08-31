@@ -131,7 +131,39 @@ fun BottomControlsRow(
             modifier = Modifier.weight(1f).padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Count pallet - using unified COUNT_DISPLAY button
+
+            Box(
+                modifier = Modifier.weight(1f).size(78.dp).padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                UnifiedButton(
+                    config = ComponentFactory.toggleButton(
+                        value = data.bools.getOrNull(5) ?: false,
+                        iconOn = R.drawable.ic_buzzer_on,
+                        iconOff = R.drawable.ic_buzzer_off,
+                        onClick = { onToggleBoolean(5, !data.bools.getOrNull(5)!!) },
+                        enabled = !isButtonLocked(5, lockedButtons),
+                        isProcessing = isButtonBusy(5, busyButtons)
+                    )
+                )
+            }
+
+            Box(
+                modifier = Modifier.weight(1f).size(78.dp).padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                UnifiedButton(
+                    config = ComponentFactory.toggleButton(
+                        value = data.bools.getOrNull(13) ?: false,
+                        iconOn = R.drawable.ic_direction_a,
+                        iconOff = R.drawable.ic_direction_a,
+                        onClick = { onToggleBoolean(13, !data.bools.getOrNull(13)!!) },
+                        enabled = !isButtonLocked(13, lockedButtons),
+                        isProcessing = isButtonBusy(13, busyButtons)
+                    )
+                )
+            }
+
             Box(
                 modifier = Modifier.weight(1f).size(78.dp).padding(4.dp),
                 contentAlignment = Alignment.Center

@@ -227,7 +227,55 @@ fun CenterPanel(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     repeat(3) { index ->
-                        val fieldIndex = 5 + index  // X=5, Y=6, Z=7
+                        val fieldIndex = 5 + index  // XS=5, YS=6, ZS=7
+                        UnifiedStatusDisplay(
+                            config = StatusDisplayConfig(
+                                type = StatusDisplayType.INLINE_NUMBER,
+                                value = uiState.intInputs[fieldIndex]
+                                    ?: (data.ints.getOrNull(fieldIndex)?.toString() ?: "0")
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Điểm kết thúc", style = MaterialTheme.typography.bodySmall)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    repeat(3) { index ->
+                        val fieldIndex = 8 + index  // XE=8, YE=9, ZE=10
+                        UnifiedStatusDisplay(
+                            config = StatusDisplayConfig(
+                                type = StatusDisplayType.INLINE_NUMBER,
+                                value = uiState.intInputs[fieldIndex]
+                                    ?: (data.ints.getOrNull(fieldIndex)?.toString() ?: "0")
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Điểm thực tế", style = MaterialTheme.typography.bodySmall)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    repeat(3) { index ->
+                        val fieldIndex = 11 + index  // XE=11, YE=12, ZE=13
                         UnifiedStatusDisplay(
                             config = StatusDisplayConfig(
                                 type = StatusDisplayType.INLINE_NUMBER,
