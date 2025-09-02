@@ -86,6 +86,11 @@ fun ControlScreen(
                     countdownJob = null
                 }
             }
+
+            is ControlViewModel.ConnectionState.Offline -> {
+                // Cancel any pending operations
+                Log.d("ControlScreen", "Entered offline mode")
+            }
             else -> { /* Don't auto-dismiss for other states */ }
         }
     }

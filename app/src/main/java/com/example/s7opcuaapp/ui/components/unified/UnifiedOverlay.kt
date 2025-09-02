@@ -192,15 +192,10 @@ private fun OfflineOverlay(
     config: OverlayConfig,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = UiConfig.Overlay.OFFLINE_ALPHA))
-            .pointerInput(Unit) {
-                awaitEachGesture { /* Block touches */ }
-            },
-        contentAlignment = Alignment.TopCenter
+    Column(
+        modifier = Modifier.fillMaxSize()
     ) {
+        // Banner thông báo ở trên
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -214,57 +209,29 @@ private fun OfflineOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WifiOff,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(24.dp)
+                Icon(
+                    imageVector = Icons.Default.WifiOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Offline Mode",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Offline Mode",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            text = config.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
+                    Text(
+                        config.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (config.showRetry) {
-                        TextButton(
-                            onClick = { config.onRetry?.invoke() },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        ) {
-                            Text("Retry")
-                        }
-                    }
-
-                    if (config.showSettings) {
-                        IconButton(
-                            onClick = { config.onSettings?.invoke() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Config",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
+                if (config.showRetry) {
+                    TextButton(onClick = { config.onRetry?.invoke() }) {
+                        Text("Retry")
                     }
                 }
             }

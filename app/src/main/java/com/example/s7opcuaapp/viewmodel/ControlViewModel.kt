@@ -3,6 +3,7 @@ package com.example.s7opcuaapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.s7opcuaapp.BuildConfig
 import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.PlcData
 import com.example.s7opcuaapp.data.repository.OptimizedOPCUARepositoryImpl
@@ -324,7 +325,19 @@ class ControlViewModel @Inject constructor(
     fun continueOffline() {
         Log.d(TAG, "Continuing in offline mode")
 
-        stopConnection()
+        // Cancel all jobs first
+        connectionJob?.cancel()
+        dataObservationJob?.cancel()
+        monitoringJob?.cancel()
+
+        viewModelScope.launch {
+            // Tell repository to enter offline mode
+            if (repository is OptimizedOPCUARepositoryImpl) {
+                repository.setOfflineMode(true)
+            }
+
+            buttonManager.releaseAllButtons()
+        }
 
         isOfflineMode = true
         isShowingTimeoutDialog = false
@@ -339,6 +352,10 @@ class ControlViewModel @Inject constructor(
     fun resetConnection() {
         viewModelScope.launch {
             Log.d(TAG, "Resetting connection")
+
+            if (repository is OptimizedOPCUARepositoryImpl) {
+                repository.setOfflineMode(false)
+            }
 
             stopConnection()
             delay(1000)

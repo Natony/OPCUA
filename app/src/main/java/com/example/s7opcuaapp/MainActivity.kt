@@ -170,8 +170,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 // Stop all connections
-                plcDataBuffer.dispose()
+                plcDataBuffer.cleanup() // Non-blocking
                 performanceMonitor.cleanup()
+                super.onDestroy()
             } catch (e: Exception) {
                 Log.e("MainActivity", "Error during cleanup", e)
             }

@@ -253,8 +253,10 @@ class PlcDataBuffer @Inject constructor(
         bufferScope.coroutineContext.cancelChildren()
 
         // Wait for all jobs to complete (non-blocking)
-        bufferScope.coroutineContext[Job]?.children?.forEach { job ->
-            job.join()
+        withTimeoutOrNull(1000L) {
+            bufferScope.coroutineContext[Job]?.children?.forEach { job ->
+                job.join()
+            }
         }
 
         // Clear data after coroutines complete
@@ -263,7 +265,7 @@ class PlcDataBuffer @Inject constructor(
         boolChanged.clear()
         intChanged.clear()
 
-        Log.d("PlcDataBuffer", "Buffer disposed completely")
+        Log.d("PlcDataBuffer", "Buffer disposed")
     }
 
     /**

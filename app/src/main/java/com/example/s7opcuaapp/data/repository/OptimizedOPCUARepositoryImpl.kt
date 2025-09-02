@@ -43,6 +43,7 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
     private val connectionLostScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val connectionMutex = Mutex()
     private val loadingTracker = LoadingTracker<String>(44) // 15 bool + 29 int nodes
+    private val isOfflineMode = AtomicBoolean(false)
 
     // Connection State
     private val isStarted = AtomicBoolean(false)
@@ -106,6 +107,12 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
 
         while (isStarted.get() && repositoryScope.isActive) {
             try {
+
+                if (isOfflineMode.get()) {
+                    Log.d(TAG, "Repository in offline mode, stopping connection loop")
+                    break
+                }
+
                 when {
                     !isConnected.get() -> {
                         val failures = handleNotConnected(consecutiveFailures)
@@ -147,6 +154,27 @@ class OptimizedOPCUARepositoryImpl @Inject constructor(
         }
 
         Log.d(TAG, "Connection loop ended")
+    }
+
+    // ADD: Method to set offline mode
+    fun setOfflineMode(enabled: Boolean) {
+        Log.d(TAG, "Setting offline mode: $enabled")
+        isOfflineMode.set(enabled)
+
+        if (enabled) {
+            // Stop connection attempts immediately
+            isStarted.set(false)
+            connectionJob?.cancel()
+
+            // Disconnect if connected - launch in repository scope
+            repositoryScope.launch {
+                try {
+                    OPCUAClientManager.disconnect()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error disconnecting in offline mode", e)
+                }
+            }
+        }
     }
 
     /**
