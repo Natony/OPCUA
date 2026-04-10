@@ -23,8 +23,8 @@ data class ConfigUiState(
     val modbusSlaveId: String = "1",
     val modbusBoolRegisterAddress: String = "0",
     val modbusIntRegisterAddress: String = "1",
-    val modbusIntRegisterCount: String = "31",
-    val modbusBoolCount: String = "14",
+    val modbusIntRegisterCount: String = "28",
+    val modbusBoolCount: String = "15",
     val modbusPollingIntervalMs: String = "250",
     val errorMessage: String? = null
 )

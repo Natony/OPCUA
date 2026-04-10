@@ -9,8 +9,8 @@ import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 fun ControlScreenPreview() {
     // Sample data for preview
     val samplePlcData = PlcData(
-        bools = List(14) { it % 2 == 0 },
-        ints = List(31) { it }
+        bools = List(15) { it % 2 == 0 },
+        ints = List(28) { it }
     )
     val sampleState = ControlUiState(
         plcData = samplePlcData,

@@ -18,7 +18,7 @@ data class DeviceEntity(
     val modbusSlaveId: Int = 1,
     val modbusBoolRegisterAddress: Int = 0,
     val modbusIntRegisterAddress: Int = 1,
-    val modbusIntRegisterCount: Int = 31,
-    val modbusBoolCount: Int = 14,
+    val modbusIntRegisterCount: Int = 28,
+    val modbusBoolCount: Int = 15,
     val modbusPollingIntervalMs: Int = 250
 )

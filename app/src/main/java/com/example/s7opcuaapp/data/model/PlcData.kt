@@ -10,8 +10,8 @@ data class PlcData(
     companion object {
         fun empty(): PlcData {
             return PlcData(
-                bools = List(14) { false },
-                ints = List(31) { 0 }
+                bools = List(15) { false },
+                ints = List(28) { 0 }
             )
         }
     }
