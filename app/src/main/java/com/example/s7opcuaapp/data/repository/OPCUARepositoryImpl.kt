@@ -20,7 +20,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Job
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
+import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UByte
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
+import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UShort
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -283,11 +285,20 @@ class OPCUARepositoryImpl(
     }
 
     /**
-     * Update Boolean value với thread safety
+     * Update Boolean value với thread safety.
+     * Hỗ trợ cả Boolean thật và các kiểu số (Modbus coil có thể trả về Word/Int thay vì Boolean).
      */
     private fun updateBoolValue(index: Int, dataValue: DataValue) {
         try {
-            val newValue = dataValue.value.value as? Boolean ?: false
+            val raw = dataValue.value.value
+            val newValue = when (raw) {
+                is Boolean -> raw
+                is Number  -> raw.toInt() != 0
+                else -> {
+                    Log.w("OPCUARepo", "Unknown bool type for index[$index]: ${raw?.javaClass?.name}, value=$raw")
+                    false
+                }
+            }
             synchronized(boolValues) {
                 boolValues[index] = newValue
             }
@@ -298,17 +309,21 @@ class OPCUARepositoryImpl(
     }
 
     /**
-     * Update Integer value với thread safety
+     * Update Integer value với thread safety.
+     * Hỗ trợ UShort (Modbus Word/UINT16), UInteger, UByte, và tất cả kiểu Number khác.
      */
     private fun updateIntValue(index: Int, dataValue: DataValue) {
         try {
             val raw = dataValue.value.value
             val newValue = when (raw) {
-                is Int      -> raw
-                is Long     -> raw.toInt()
-                is Short    -> raw.toInt()
-                is UInteger -> raw.toInt()
-                else        -> 0
+                is UShort   -> raw.intValue()
+                is UInteger -> raw.intValue()
+                is UByte    -> raw.intValue()
+                is Number   -> raw.toInt()
+                else        -> {
+                    Log.w("OPCUARepo", "Unknown int type for index[$index]: ${raw?.javaClass?.name}, value=$raw")
+                    0
+                }
             }
 
             synchronized(intValues) {
@@ -448,10 +463,10 @@ class OPCUARepositoryImpl(
 
         if (index in intNodeIds.indices) {
             val nodeIdString = intNodeIds[index]
-            val shortValue = value.toShort()
+            val ushortValue = UShort.valueOf(value and 0xFFFF)
             val accessLevel = OPCUAClientManager.readAccessLevel(nodeIdString)
             if (accessLevel != null && (accessLevel.toInt() and 0x02) != 0) {
-                val status = OPCUAClientManager.writeNode(nodeIdString, shortValue)
+                val status = OPCUAClientManager.writeNode(nodeIdString, ushortValue)
                 if (status == null || !status.isGood) {
                     Log.e("OPCUARepo", "❌ WriteInt failed for $nodeIdString: $status")
                     throw Exception("WriteInt failed: $status")

@@ -22,6 +22,7 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
 import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
 import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UByte
+import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UShort
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.Unsigned
 import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
 import org.eclipse.milo.opcua.stack.core.types.structured.MonitoringParameters
@@ -171,6 +172,7 @@ object OPCUAClientManager {
             val nodeId = NodeId.parse(nodeIdString)
             val variant = when (rawValue) {
                 is Boolean  -> Variant(rawValue)
+                is UShort   -> Variant(rawValue)
                 is Int      -> Variant(rawValue)
                 is Short    -> Variant(rawValue)
                 else        -> {
