@@ -69,7 +69,7 @@ class OPCUARepositoryImpl(
     /**
      * Thread-safe start với proper synchronization
      */
-    suspend fun start() = connectionMutex.withLock {
+    override suspend fun start() = connectionMutex.withLock {
         if (isStarted.get()) {
             Log.d("OPCUARepo", "⚠️ Repository already started, skipping")
             return@withLock
@@ -396,7 +396,7 @@ class OPCUARepositoryImpl(
         }
     }
 
-    fun observeLoadingPercent(): StateFlow<Int> = loadingTracker.percent
+    override fun observeLoadingPercent(): StateFlow<Int> = loadingTracker.percent
 
     /**
      * Publish update lên UI thread

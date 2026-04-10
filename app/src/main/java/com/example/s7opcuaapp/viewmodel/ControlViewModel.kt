@@ -3,7 +3,6 @@ package com.example.s7opcuaapp.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.s7opcuaapp.data.local.PrefsManager
-import com.example.s7opcuaapp.data.repository.OPCUARepositoryImpl
 import com.example.s7opcuaapp.data.repository.S7Repository
 import com.example.s7opcuaapp.ui.screen.control.ControlUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,7 +29,7 @@ class ControlViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ControlUiState())
     val uiState: StateFlow<ControlUiState> = _uiState
 
-    private val repoImpl = repository as OPCUARepositoryImpl
+    private val repo = repository
     private val functionCodeNodeIndex = 14
 
     // Synchronization để tránh race condition khi start/stop nhanh
@@ -41,7 +40,7 @@ class ControlViewModel @Inject constructor(
     init {
         // Quan sát tỉ lệ load với proper error handling
         viewModelScope.launch {
-            repoImpl.observeLoadingPercent()
+            repo.observeLoadingPercent()
                 .catch { err ->
                     Log.e("ControlVM", "Error observing loading percent", err)
                     _uiState.update { it.copy(errorMessage = "Loading error: ${err.message}") }
@@ -65,12 +64,12 @@ class ControlViewModel @Inject constructor(
                 }
 
                 connectionStarted = true
-                Log.d("ControlVM", "🚀 Starting OPC UA connection...")
+                Log.d("ControlVM", "🚀 Starting PLC connection...")
 
                 try {
                     // Update device info from preferences
                     prefsManager.getCurrentDevice()?.let { device ->
-                        repoImpl.updateDevice(device)
+                        repo.updateDevice(device)
                         Log.d("ControlVM", "Updated device: ${device.name} @ ${device.ipAddress}:${device.port}")
                     }
 
@@ -78,7 +77,7 @@ class ControlViewModel @Inject constructor(
                     _uiState.update { it.copy(loadingPercent = 0, errorMessage = null) }
 
                     // Start repository connection
-                    repoImpl.start()
+                    repo.start()
 
                     // Start observing PLC data
                     startDataObservation()
@@ -100,7 +99,7 @@ class ControlViewModel @Inject constructor(
         dataObservationJob?.cancel()
 
         dataObservationJob = viewModelScope.launch {
-            repoImpl.observePlcData()
+            repo.observePlcData()
                 .flowOn(Dispatchers.IO)
                 .catch { err ->
                     Log.e("ControlVM", "Error observing PLC data", err)
@@ -125,7 +124,7 @@ class ControlViewModel @Inject constructor(
                     return@withLock
                 }
 
-                Log.d("ControlVM", "🛑 Stopping OPC UA connection...")
+                Log.d("ControlVM", "🛑 Stopping PLC connection...")
                 connectionStarted = false
 
                 try {
@@ -134,12 +133,12 @@ class ControlViewModel @Inject constructor(
                     dataObservationJob = null
 
                     // Stop repository
-                    repoImpl.stop()
+                    repo.stop()
 
                     // Reset loading state when stopped
                     _uiState.update { it.copy(loadingPercent = 0) }
 
-                    Log.d("ControlVM", "✅ OPC UA connection stopped successfully")
+                    Log.d("ControlVM", "✅ PLC connection stopped successfully")
 
                 } catch (e: Exception) {
                     Log.e("ControlVM", "Error stopping connection", e)
@@ -177,7 +176,7 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, errorMessage = null) }
             try {
-                repoImpl.writeBoolean(index, newValue)
+                repo.writeBoolean(index, newValue)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "Ghi Boolean thất bại: ${e.message}") }
             } finally {
@@ -199,12 +198,12 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, errorMessage = null) }
             try {
-                repoImpl.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
+                repo.writeInt(functionCodeNodeIndex, uiState.value.selectedFunction)
                 listOf(5,6,7,8,9,10).forEach { idx ->
                     val txt = uiState.value.intInputs[idx]
                         ?: uiState.value.plcData.ints.getOrNull(idx)?.toString().orEmpty()
                     val v = txt.toIntOrNull() ?: 0
-                    repoImpl.writeInt(idx, v)
+                    repo.writeInt(idx, v)
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "Ghi thất bại: ${e.message}") }
@@ -227,7 +226,7 @@ class ControlViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isWriting = true, openDialogForIndex = null, errorMessage = null) }
             try {
-                repoImpl.writeInt(index, value)
+                repo.writeInt(index, value)
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "Ghi Integer thất bại: ${e.message}") }
             } finally {
@@ -240,7 +239,7 @@ class ControlViewModel @Inject constructor(
         if (!connectionStarted) return
         viewModelScope.launch {
             try {
-                repoImpl.writeBoolean(index, true)
+                repo.writeBoolean(index, true)
             } catch (e: Exception) {
                 Log.e("ControlVM", "Error in onStartPress", e)
             }
@@ -251,7 +250,7 @@ class ControlViewModel @Inject constructor(
         if (!connectionStarted) return
         viewModelScope.launch {
             try {
-                repoImpl.writeBoolean(index, false)
+                repo.writeBoolean(index, false)
             } catch (e: Exception) {
                 Log.e("ControlVM", "Error in onEndPress", e)
             }
@@ -275,7 +274,7 @@ class ControlViewModel @Inject constructor(
         // Stop connection (launch in GlobalScope since viewModelScope is cancelled)
         kotlinx.coroutines.GlobalScope.launch {
             try {
-                repoImpl.stop()
+                repo.stop()
             } catch (e: Exception) {
                 Log.e("ControlVM", "Error stopping in onCleared", e)
             }

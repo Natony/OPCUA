@@ -65,8 +65,10 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation("org.eclipse.milo:sdk-client:0.6.15")   // SDK client chính
-    implementation("org.eclipse.milo:stack-client:0.6.15")     // Phần stack client (nếu compile lỗi thì thêm)
+    implementation("org.eclipse.milo:sdk-client:0.6.15")   // OPC UA SDK client
+    implementation("org.eclipse.milo:stack-client:0.6.15")     // OPC UA stack client
+
+    implementation("com.ghgande:j2mod:3.2.1")              // Modbus TCP/IP client
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")

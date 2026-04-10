@@ -127,17 +127,22 @@ fun MainNavGraph(rootNavController: NavHostController) {
                 val uiState by configViewModel.uiState.collectAsStateWithLifecycle()
                 ConfigScreen(
                     uiState = uiState,
-                    onNewDeviceNameChanged = { deviceName -> configViewModel.onNewDeviceNameChanged(deviceName) },
-                    onNewDeviceIpChanged = { deviceIp -> configViewModel.onNewDeviceIpChanged(deviceIp) },
-                    onNewDevicePortChanged = { devicePort -> configViewModel.onNewDevicePortChanged(devicePort) },
-                    onNewDeviceUsernameChanged = { deviceUsername -> configViewModel.onNewDeviceUsernameChanged(deviceUsername) },
-                    onNewDevicePasswordChanged = { devicePassword -> configViewModel.onNewDevicePasswordChanged(devicePassword) },
+                    onNewDeviceNameChanged = { configViewModel.onNewDeviceNameChanged(it) },
+                    onNewDeviceIpChanged = { configViewModel.onNewDeviceIpChanged(it) },
+                    onNewDevicePortChanged = { configViewModel.onNewDevicePortChanged(it) },
+                    onNewDeviceUsernameChanged = { configViewModel.onNewDeviceUsernameChanged(it) },
+                    onNewDevicePasswordChanged = { configViewModel.onNewDevicePasswordChanged(it) },
+                    onProtocolChanged = { configViewModel.onProtocolChanged(it) },
+                    onModbusSlaveIdChanged = { configViewModel.onModbusSlaveIdChanged(it) },
+                    onModbusBoolRegisterAddressChanged = { configViewModel.onModbusBoolRegisterAddressChanged(it) },
+                    onModbusIntRegisterAddressChanged = { configViewModel.onModbusIntRegisterAddressChanged(it) },
+                    onModbusIntRegisterCountChanged = { configViewModel.onModbusIntRegisterCountChanged(it) },
+                    onModbusBoolCountChanged = { configViewModel.onModbusBoolCountChanged(it) },
+                    onModbusPollingIntervalChanged = { configViewModel.onModbusPollingIntervalChanged(it) },
                     onAddDevice = { configViewModel.onAddDevice() },
                     onRemoveDevice = { device -> configViewModel.onRemoveDevice(device) },
                     onSelectDevice = { device ->
-                        // Khi chọn device ở đây, ta sẽ connect lại ControlViewModel
                         configViewModel.onSelectDevice(device) {
-                            // Sau khi đổi device thành công, quay về Control tab
                             topNavController.navigate("control") {
                                 popUpTo("control") { inclusive = true }
                             }

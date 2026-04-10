@@ -47,16 +47,44 @@ fun DeviceListItem(
                     else MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${device.ipAddress}:${device.port}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (device.opcUsername.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${device.ipAddress}:${device.port}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    val protocolLabel = if (device.useOpcUa) "OPC UA" else "Modbus"
+                    val protocolColor = if (device.useOpcUa)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.tertiary
+                    Surface(
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = protocolColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = protocolLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = protocolColor,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+                if (device.useOpcUa && device.opcUsername.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = "User: ${device.opcUsername}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!device.useOpcUa) {
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = "Slave: ${device.modbusSlaveId}",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                         else MaterialTheme.colorScheme.onSurfaceVariant

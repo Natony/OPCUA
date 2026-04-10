@@ -2,6 +2,7 @@ package com.example.s7opcuaapp.di
 
 import com.example.s7opcuaapp.data.local.PrefsManager
 import com.example.s7opcuaapp.data.model.DeviceEntity
+import com.example.s7opcuaapp.data.repository.ModbusRepositoryImpl
 import com.example.s7opcuaapp.data.repository.OPCUARepositoryImpl
 import com.example.s7opcuaapp.data.repository.S7Repository
 import dagger.Module
@@ -16,9 +17,9 @@ import dagger.hilt.android.scopes.ViewModelScoped
 object RepositoryModule {
 
     /**
-     * Tuỳ chỉnh: Lấy DeviceEntity hiện tại từ PrefsManager,
-     * nếu useOpcUa = true thì trả về instance OPCUARepositoryImpl(device).
-     * Bạn có thể bổ sung thêm repository dạng khác nếu cần.
+     * Tạo S7Repository dựa trên protocol được chọn trong DeviceEntity.
+     * useOpcUa = true  → OPCUARepositoryImpl (OPC UA)
+     * useOpcUa = false → ModbusRepositoryImpl (Modbus TCP/IP)
      */
     @Provides
     @ViewModelScoped
@@ -30,6 +31,10 @@ object RepositoryModule {
                 ipAddress = "192.168.1.12",
                 useOpcUa = true
             )
-        return OPCUARepositoryImpl(device)
+        return if (device.useOpcUa) {
+            OPCUARepositoryImpl(device)
+        } else {
+            ModbusRepositoryImpl(device)
+        }
     }
 }
