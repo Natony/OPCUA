@@ -16,6 +16,7 @@ import org.eclipse.milo.opcua.stack.core.types.structured.EndpointDescription
 import org.eclipse.milo.opcua.stack.core.types.structured.UserTokenPolicy
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
 import java.util.concurrent.CompletableFuture
+import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaMonitoredItem
 import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaSubscription
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
@@ -106,13 +107,17 @@ object OPCUAClientManager {
 
     /**
      * Tạo monitored item cho một NodeId (dùng chung một subscription).
+     * Trả về true nếu tạo thành công, false nếu thất bại.
+     *
+     * FIX: Truyền ValueConsumer ngay khi tạo MonitoredItem (overload 3 tham số)
+     * để tránh race condition - giá trị ban đầu có thể đến trước khi setValueConsumer.
      */
     suspend fun createSubscription(
         nodeIdString: String,
         samplingInterval: UInteger = UInteger.valueOf(250),
         onValueChange: (DataValue) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        val cli = client ?: return@withContext
+    ): Boolean = withContext(Dispatchers.IO) {
+        val cli = client ?: return@withContext false
         try {
             if (subscription == null) {
                 subscription = cli.subscriptionManager.createSubscription(250.0).get()
@@ -142,23 +147,51 @@ object OPCUAClientManager {
                 monitoringParams
             )
 
+            // Truyền consumer ngay khi tạo để không mất giá trị ban đầu
+            val valueConsumer = UaMonitoredItem.ValueConsumer { _, dataValue ->
+                try {
+                    onValueChange(dataValue)
+                } catch (e: Exception) {
+                    Log.w("OPCUAClient", "Error in value consumer for $nodeIdString", e)
+                }
+            }
+
             val items = sub.createMonitoredItems(
                 TimestampsToReturn.Both,
-                listOf(request)
+                listOf(request),
+                valueConsumer
             ).get()
 
+            var allGood = true
             items.forEach { item ->
-                item.setValueConsumer { _, dataValue ->
-                    try {
-                        onValueChange(dataValue)
-                    } catch (e: Exception) {
-                        Log.w("OPCUAClient", "Error in value consumer for $nodeIdString", e)
-                    }
+                if (item.statusCode.isGood) {
+                    Log.d("OPCUAClient", "✅ MonitoredItem created for $nodeIdString")
+                } else {
+                    Log.e("OPCUAClient", "❌ MonitoredItem failed for $nodeIdString: ${item.statusCode}")
+                    allGood = false
                 }
-                Log.d("OPCUAClient", "✅ MonitoredItem created for $nodeIdString")
             }
+            allGood
         } catch (e: Exception) {
             Log.e("OPCUAClient", "❌ Failed to create subscription for $nodeIdString", e)
+            false
+        }
+    }
+
+    /**
+     * Đọc giá trị hiện tại của nhiều nodes cùng lúc (batch read).
+     */
+    suspend fun readNodes(nodeIdStrings: List<String>): List<DataValue> = withContext(Dispatchers.IO) {
+        val cli = client ?: return@withContext emptyList()
+        try {
+            val readValueIds = nodeIdStrings.map { nodeIdString ->
+                ReadValueId(NodeId.parse(nodeIdString), AttributeId.Value.uid(), null, null)
+            }
+            val response = cli.read(0.0, TimestampsToReturn.Both, readValueIds).get()
+            response.results?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            Log.e("OPCUAClient", "❌ Failed to batch read ${nodeIdStrings.size} nodes", e)
+            emptyList()
         }
     }
 

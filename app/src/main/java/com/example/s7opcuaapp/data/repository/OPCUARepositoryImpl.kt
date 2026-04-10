@@ -241,16 +241,20 @@ class OPCUARepositoryImpl(
         // Subscribe boolean nodes
         boolNodeIds.forEachIndexed { idx, nodeId ->
             try {
-                OPCUAClientManager.createSubscription(
+                val success = OPCUAClientManager.createSubscription(
                     nodeIdString = nodeId,
                     samplingInterval = UInteger.valueOf(250)
                 ) { dataValue ->
                     updateBoolValue(idx, dataValue)
                 }
 
-                loadingTracker.markLoaded(nodeId)
-                successfulSubscriptions++
-                Log.d("OPCUARepo", "📈 Bool[$idx] subscription created, progress: ${loadingTracker.loadedCount}/${totalNodes}")
+                if (success) {
+                    loadingTracker.markLoaded(nodeId)
+                    successfulSubscriptions++
+                    Log.d("OPCUARepo", "📈 Bool[$idx] subscription OK, progress: ${loadingTracker.loadedCount}/${totalNodes}")
+                } else {
+                    Log.w("OPCUARepo", "⚠️ Bool[$idx] subscription failed for $nodeId (Bad status from server)")
+                }
 
             } catch (e: Exception) {
                 Log.e("OPCUARepo", "❌ Failed to subscribe bool[$idx]: $nodeId", e)
@@ -260,16 +264,20 @@ class OPCUARepositoryImpl(
         // Subscribe integer nodes
         intNodeIds.forEachIndexed { idx, nodeId ->
             try {
-                OPCUAClientManager.createSubscription(
+                val success = OPCUAClientManager.createSubscription(
                     nodeIdString = nodeId,
                     samplingInterval = UInteger.valueOf(250)
                 ) { dataValue ->
                     updateIntValue(idx, dataValue)
                 }
 
-                loadingTracker.markLoaded(nodeId)
-                successfulSubscriptions++
-                Log.d("OPCUARepo", "📈 Int[$idx] subscription created, progress: ${loadingTracker.loadedCount}/${totalNodes}")
+                if (success) {
+                    loadingTracker.markLoaded(nodeId)
+                    successfulSubscriptions++
+                    Log.d("OPCUARepo", "📈 Int[$idx] subscription OK, progress: ${loadingTracker.loadedCount}/${totalNodes}")
+                } else {
+                    Log.w("OPCUARepo", "⚠️ Int[$idx] subscription failed for $nodeId (Bad status from server)")
+                }
 
             } catch (e: Exception) {
                 Log.e("OPCUARepo", "❌ Failed to subscribe int[$idx]: $nodeId", e)
@@ -280,8 +288,45 @@ class OPCUARepositoryImpl(
         Log.d("OPCUARepo", "🎯 Subscriptions completed: $successfulSubscriptions/$totalSubscriptions successful")
         Log.d("OPCUARepo", "🎯 Loading tracker: ${loadingTracker.loadedCount}/${totalNodes} = ${loadingTracker.percent.value}%")
 
+        // Đọc giá trị ban đầu để đảm bảo dữ liệu load ngay lập tức
+        readInitialValues()
+
         // Bắt đầu batch update timer
         startBatchUpdateTimer()
+    }
+
+    /**
+     * Đọc giá trị ban đầu (batch read) cho tất cả nodes.
+     * Đảm bảo dữ liệu hiển thị ngay sau khi subscribe, không phải chờ giá trị thay đổi.
+     */
+    private suspend fun readInitialValues() {
+        Log.d("OPCUARepo", "📖 Reading initial values for all nodes...")
+
+        // Batch read bool nodes
+        val boolDataValues = OPCUAClientManager.readNodes(boolNodeIds)
+        boolDataValues.forEachIndexed { idx, dataValue ->
+            if (dataValue.statusCode?.isGood == true) {
+                updateBoolValue(idx, dataValue)
+                Log.d("OPCUARepo", "📖 Bool[$idx] initial value: ${dataValue.value?.value}")
+            } else {
+                Log.w("OPCUARepo", "⚠️ Bool[$idx] bad status: ${dataValue.statusCode}")
+            }
+        }
+
+        // Batch read int nodes
+        val intDataValues = OPCUAClientManager.readNodes(intNodeIds)
+        intDataValues.forEachIndexed { idx, dataValue ->
+            if (dataValue.statusCode?.isGood == true) {
+                updateIntValue(idx, dataValue)
+                Log.d("OPCUARepo", "📖 Int[$idx] initial value: ${dataValue.value?.value} (type: ${dataValue.value?.value?.javaClass?.simpleName})")
+            } else {
+                Log.w("OPCUARepo", "⚠️ Int[$idx] bad status: ${dataValue.statusCode}")
+            }
+        }
+
+        // Force publish ngay lập tức
+        publishUpdate()
+        Log.d("OPCUARepo", "📖 Initial values read complete - ${boolDataValues.size} bools, ${intDataValues.size} ints")
     }
 
     /**
